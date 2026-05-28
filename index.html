@@ -1393,7 +1393,46 @@ $('main').addEventListener('click',e=>{
   const iz=e.target.closest('.iz');if(iz&&!iz.classList.contains('has')){const sid=iz.id.replace('iz-','');const fi=$('if-'+sid);if(fi) fi.click();return;}
   const editStep=e.target.closest('[data-edit-step]');if(editStep){openEditStep(editStep.dataset.cat,editStep.dataset.editStep);return;}
 });
-$('main').addEventListener('change',e=>{if(e.target.classList.contains('ck')) updateProg(activeCatId);});
+$('main').addEventListener('change', e => {
+  const ck = e.target;
+  if (!ck.classList.contains('ck')) return;
+
+  // 1) DOM에서 체크박스가 어느 step/block/item에 속하는지 찾기
+  const sc = ck.closest('.sc');  // section card
+  if (sc) {
+    const stepId = sc.id.replace('step-', '');
+    // SYSTEMS에서 해당 step 찾기
+    for (const sys of (window.SYSTEMS || [])) {
+      for (const cat of (sys.cats || [])) {
+        const step = (cat.steps || []).find(s => s.id === stepId);
+        if (step) {
+          // 이 step의 checklist block에서 몇 번째 체크박스인지 계산
+          const allCks = [...sc.querySelectorAll('input.ck')];
+          const ckIdx = allCks.indexOf(ck);
+          // SYSTEMS의 checklist 블록 items 순서와 매핑
+          let itemCount = 0;
+          for (const block of (step.blocks || [])) {
+            if (block.type === 'checklist') {
+              const items = block.items || [];
+              if (ckIdx < itemCount + items.length) {
+                items[ckIdx - itemCount].checked = ck.checked;
+                break;
+              }
+              itemCount += items.length;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 2) 진행률 업데이트
+  updateProg(activeCatId);
+
+  // 3) Firebase 저장 (scheduleWrite는 window에서 오버라이드됨)
+  if (typeof window.scheduleWrite === 'function') window.scheduleWrite();
+});
 $('btn-add-cat').addEventListener('click',openAddCat);
 $('btn-print').addEventListener('click',()=>window.print());
 $('btn-save').addEventListener('click',saveGuide);
@@ -1823,9 +1862,26 @@ function listen() {
     const raw = snap.val();
     if (!raw) return;
     const normalized = normSystems(raw);
-    if (!normalized.length) return; // 빈 데이터 무시
+    if (!normalized.length) return;
+
+    const prev = window.SYSTEMS;
     window.SYSTEMS = normalized;
+
     if (_typing) return;
+
+    // 체크박스만 변경된 경우 부분 업데이트 (전체 re-render 방지)
+    if (prev && onlyCheckboxChanged(prev, normalized)) {
+      patchCheckboxes(normalized);
+      if (typeof updateProg === 'function') {
+        (window.SYSTEMS||[]).forEach(sys =>
+          (sys.cats||[]).forEach(cat => updateProg(cat.id))
+        );
+      }
+      badge('synced', '동기화됨');
+      return;
+    }
+
+    // 구조 변경된 경우 전체 re-render
     const sy = window.scrollY;
     if (typeof renderSysTabs === 'function') renderSysTabs();
     if (typeof renderSidebar === 'function') renderSidebar();
@@ -1901,6 +1957,72 @@ function showErr(msg) {
   m.classList.add('show');
 }
 
+
+/* ── 체크박스만 변경됐는지 비교 ── */
+function onlyCheckboxChanged(prev, next) {
+  try {
+    if (!prev || !next || prev.length !== next.length) return false;
+    for (let si = 0; si < prev.length; si++) {
+      const ps = prev[si], ns = next[si];
+      if (!ps.cats || !ns.cats || ps.cats.length !== ns.cats.length) return false;
+      for (let ci = 0; ci < ps.cats.length; ci++) {
+        const pc = ps.cats[ci], nc = ns.cats[ci];
+        if (!pc.steps || !nc.steps || pc.steps.length !== nc.steps.length) return false;
+        for (let sti = 0; sti < pc.steps.length; sti++) {
+          const pst = pc.steps[sti], nst = nc.steps[sti];
+          if (pst.label !== nst.label) return false;
+          if (!pst.blocks || !nst.blocks || pst.blocks.length !== nst.blocks.length) return false;
+          for (let bi = 0; bi < pst.blocks.length; bi++) {
+            const pb = pst.blocks[bi], nb = nst.blocks[bi];
+            if (pb.type !== nb.type) return false;
+            if (pb.type === 'checklist') {
+              // 항목 수나 내용이 달라지면 false
+              if (!pb.items || !nb.items || pb.items.length !== nb.items.length) return false;
+              for (let ii = 0; ii < pb.items.length; ii++) {
+                if (pb.items[ii].label !== nb.items[ii].label) return false;
+                // checked만 달라도 OK (이게 우리가 감지하려는 변화)
+              }
+            } else {
+              // 체크리스트 아닌 블록이 달라지면 전체 re-render 필요
+              if (JSON.stringify(pb) !== JSON.stringify(nb)) return false;
+            }
+          }
+        }
+      }
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+/* ── DOM 체크박스 상태만 패치 (re-render 없이) ── */
+function patchCheckboxes(systems) {
+  (systems || []).forEach(sys => {
+    (sys.cats || []).forEach(cat => {
+      (cat.steps || []).forEach(step => {
+        const sc = document.getElementById('step-' + step.id);
+        if (!sc) return;
+        const domCks = [...sc.querySelectorAll('input.ck')];
+        let idx = 0;
+        (step.blocks || []).forEach(block => {
+          if (block.type === 'checklist') {
+            (block.items || []).forEach(item => {
+              if (domCks[idx]) domCks[idx].checked = !!item.checked;
+              idx++;
+            });
+          }
+        });
+      });
+    });
+  });
+}
+
+/* ── 총 steps 수 계산 (데이터 풍부도 비교용) ── */
+function countSteps(systems) {
+  if (!systems || !Array.isArray(systems)) return 0;
+  return systems.reduce((t, sys) =>
+    t + (sys.cats||[]).reduce((ct, cat) => ct + (cat.steps||[]).length, 0), 0);
+}
+
 /* ── Firebase 메인 초기화 ── */
 async function fbInit() {
   badge('pending', '연결 중...');
@@ -1908,27 +2030,49 @@ async function fbInit() {
   try {
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 12000));
 
-    /* 1) SYSTEMS 로드 */
-    const sysSnap = await Promise.race([_SYS_REF.once('value'), timeout]);
-    const raw = sysSnap.val();
+    /* ── 로컬 data-store 읽기 (HTML 파일에 저장된 데이터) ── */
+    let localSystems = null, localImgs = {};
+    const dsEl = document.getElementById('data-store');
+    if (dsEl && dsEl.textContent.trim()) {
+      try {
+        const sv = JSON.parse(dsEl.textContent);
+        if (sv.systems) localSystems = normSystems(sv.systems);
+        if (sv.imgStore) localImgs = sv.imgStore;
+        if (sv._uid && window._uid !== undefined) window._uid = sv._uid;
+      } catch(e) { console.warn('[Firebase] data-store 파싱 실패', e); }
+    }
 
-    if (raw) {
-      const normalized = normSystems(raw);
-      if (normalized.length > 0) {
-        window.SYSTEMS = normalized;
-      }
-      // else: Firebase에 빈 데이터 → 현재 SYSTEMS 유지
+    /* ── Firebase 데이터 로드 ── */
+    const sysSnap = await Promise.race([_SYS_REF.once('value'), timeout]);
+    const fbRaw     = sysSnap.val();
+    const fbSystems = fbRaw ? normSystems(fbRaw) : null;
+
+    /* ── 어느 쪽 데이터를 사용할지 결정 ── */
+    const localCount = countSteps(localSystems || window.SYSTEMS);
+    const fbCount    = countSteps(fbSystems);
+
+    console.log(`[Firebase] 로컬 steps: ${localCount}개, Firebase steps: ${fbCount}개`);
+
+    if (fbSystems && fbCount >= localCount) {
+      /* Firebase 데이터가 더 많거나 같음 → Firebase 사용 */
+      console.log('[Firebase] Firebase 데이터 사용');
+      window.SYSTEMS = fbSystems;
     } else {
-      /* Firebase 비어있음 → 현재 SYSTEMS 업로드 */
-      const cur = window.SYSTEMS;
-      if (cur && Array.isArray(cur) && cur.length > 0) {
-        badge('pending', '초기 업로드 중...');
+      /* 로컬 데이터가 더 많음 → 로컬을 Firebase에 업로드 */
+      const toUpload = localSystems || window.SYSTEMS;
+      if (toUpload && Array.isArray(toUpload) && toUpload.length > 0) {
+        console.log(`[Firebase] 로컬(${localCount}개) > Firebase(${fbCount}개) → 로컬 데이터를 Firebase에 업로드`);
+        badge('pending', '데이터 업로드 중...');
         _suppress = true;
-        await _SYS_REF.set(cur);
+        await _SYS_REF.set(toUpload);
+        window.SYSTEMS = toUpload;
+        /* 로컬 이미지도 업로드 */
+        const imgs = Object.keys(localImgs).length ? localImgs : (window.imgStore || {});
+        if (Object.keys(imgs).length) await _IMGS_REF.set(imgs);
       }
     }
 
-    /* 2) 이미지 로드 */
+    /* ── 이미지 로드 ── */
     const imgSnap = await _IMGS_REF.once('value');
     const imgData = imgSnap.val();
     if (imgData) {
@@ -1936,7 +2080,7 @@ async function fbInit() {
       Object.assign(window.imgStore, imgData);
     }
 
-    /* 3) activeSysId 동기화 */
+    /* ── activeSysId 보정 ── */
     if (window.SYSTEMS && window.SYSTEMS.length) {
       const found = window.SYSTEMS.find(s => s.id === window.activeSysId);
       if (!found) {
