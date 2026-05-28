@@ -1006,7 +1006,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 <script>
 'use strict';
 /* ════ UTILS ════ */
-let _uid=3000;
+var _uid=3000;
 const uid=()=>'x'+(++_uid);
 const $=id=>document.getElementById(id);
 const esc=s=>s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1018,7 +1018,7 @@ const TPL={table:{icon:'📋',label:'표'},timeline:{icon:'📌',label:'절차'}
 
 /* ════ DATA ════ */
 // SYSTEMS: [{id, label, cats:[{id,icon,label,desc,steps:[{id,label,tag,tl,blocks}]}]}]
-let SYSTEMS=[], activeSysId='', activeCatId='', imgStore={};
+var SYSTEMS=[], activeSysId='', activeCatId='', imgStore={};
 
 function initData(){
   const ds=$('data-store');
