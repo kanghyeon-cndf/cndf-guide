@@ -1811,29 +1811,47 @@ function compress(file) {
   });
 }
 
-/* ── SYSTEMS 쓰기 (디바운스 + 빈 데이터 보호) ── */
+/* ── SYSTEMS 쓰기 (디바운스 800ms + 타임아웃 5s) ── */
 window.scheduleWrite = function() {
-  if (!_ready) return;
+  if (!_ready || !_SYS_REF) return;
   const sys = window.SYSTEMS;
   if (!sys || !Array.isArray(sys) || sys.length === 0) {
-    console.warn('[Firebase] scheduleWrite 차단: SYSTEMS가 비어있음');
+    console.warn('[Firebase] scheduleWrite 차단: SYSTEMS 비어있음');
     return;
   }
   clearTimeout(_writeTimer);
   badge('pending', '저장 중...');
-  _writeTimer = setTimeout(() => {
-    _suppress = true;
-    _SYS_REF.set(sys)
-      .then(() => badge('synced', '동기화됨'))
-      .catch(e => { badge('error', '저장 실패'); console.error(e); });
-  }, 1500);
+  _writeTimer = setTimeout(async () => {
+    try {
+      // 5초 안에 완료 안 되면 타임아웃 처리
+      const writeTimeout = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('WRITE_TIMEOUT')), 5000)
+      );
+      _suppress = true;
+      await Promise.race([_SYS_REF.set(sys), writeTimeout]);
+      badge('synced', '동기화됨');
+    } catch(e) {
+      _suppress = false; // suppress 해제
+      console.error('[Firebase] 쓰기 실패:', e.message);
+      if (e.message === 'WRITE_TIMEOUT') {
+        badge('error', '저장 시간 초과');
+      } else if ((e.code||e.message||'').includes('PERMISSION_DENIED')) {
+        badge('error', '권한 오류');
+        showErr('Firebase 규칙을 확인해 주세요.\n규칙 탭에서 ".read":true, ".write":true 로 설정 후 게시하세요.');
+      } else {
+        badge('error', '저장 실패');
+      }
+    }
+  }, 800);
 };
 
 /* ── 이미지 저장 ── */
 window.pushImages = function() {
-  if (!_ready) return;
+  if (!_ready || !_IMGS_REF) return;
   const imgs = window.imgStore || {};
-  _IMGS_REF.set(imgs).catch(e => console.warn('이미지 저장 실패', e));
+  _IMGS_REF.set(imgs)
+    .then(() => badge('synced', '동기화됨'))
+    .catch(e => console.warn('[Firebase] 이미지 저장 실패:', e.message));
 };
 
 /* ── syncImgStore ── */
@@ -1888,6 +1906,10 @@ function listen() {
     if (typeof renderMain    === 'function') renderMain();
     window.scrollTo(0, sy);
     badge('synced', '동기화됨');
+  , err => {
+    console.error('[Firebase] 리스너 오류:', err.code, err.message);
+    _ready = false;
+    badge('error', '연결 끊김 (클릭)');
   });
 
   _IMGS_REF.on('value', snap => {
@@ -2098,7 +2120,7 @@ async function fbInit() {
     badge('error', '연결 실패 (클릭)');
     const code = err.code || err.message || '';
     if (code.includes('PERMISSION_DENIED') || code.includes('permission'))
-      showErr('권한 오류 — Firebase 규칙을 테스트 모드로 변경해 주세요.');
+      showErr('Firebase 규칙 만료 또는 권한 오류입니다.\n\n규칙 탭에서 아래로 변경 후 "게시" 버튼을 누르세요:\n{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}');
     else if (code.includes('TIMEOUT'))
       showErr('연결 시간 초과 — 인터넷 연결을 확인해 주세요.');
     else
