@@ -1707,22 +1707,38 @@ const FB_CFG = {
   projectId:   "guide-4a26e",
   appId:       "1:940171197943:web:e9c62d8bc02d760af942f2"
 };
-
-/* ── Firebase 초기화 (중복 방지) ── */
 try { firebase.app(); } catch(e) { firebase.initializeApp(FB_CFG); }
 const _db       = firebase.database();
 const _SYS_REF  = _db.ref('guide/systems');
 const _IMGS_REF = _db.ref('guide/images');
 const _ONL_REF  = _db.ref('guide/online');
 
-/* ── 공유 상태 ── */
-let _ready      = false;
-let _writeTimer = null;
-let _suppress   = false;
-let _typing     = false;
-let _myRef      = null;
+let _ready = false, _writeTimer = null, _suppress = false, _typing = false;
 
-/* ── Sync badge helper (window 범위 함수에 위임) ── */
+/* ── Firebase 배열 복원 (Firebase는 배열을 객체로 반환할 수 있음) ── */
+function toArr(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  return Object.keys(v).sort((a,b) => +a - +b).map(k => v[k]);
+}
+function normSystems(raw) {
+  return toArr(raw).map(sys => ({
+    ...sys,
+    cats: toArr(sys.cats).map(cat => ({
+      ...cat,
+      steps: toArr(cat.steps).map(step => ({
+        ...step,
+        blocks: toArr(step.blocks).map(bl => ({
+          ...bl,
+          rows:  bl.rows  ? toArr(bl.rows)  : undefined,
+          items: bl.items ? toArr(bl.items) : undefined,
+        }))
+      }))
+    }))
+  }));
+}
+
+/* ── badge ── */
 function badge(state, txt) {
   const el = document.getElementById('sync-badge');
   if (!el) return;
@@ -1756,28 +1772,32 @@ function compress(file) {
   });
 }
 
-/* ── SYSTEMS 저장 (디바운스 1.5s) ── */
+/* ── SYSTEMS 쓰기 (디바운스 + 빈 데이터 보호) ── */
 window.scheduleWrite = function() {
   if (!_ready) return;
+  const sys = window.SYSTEMS;
+  if (!sys || !Array.isArray(sys) || sys.length === 0) {
+    console.warn('[Firebase] scheduleWrite 차단: SYSTEMS가 비어있음');
+    return;
+  }
   clearTimeout(_writeTimer);
   badge('pending', '저장 중...');
   _writeTimer = setTimeout(() => {
     _suppress = true;
-    _SYS_REF.set(window.SYSTEMS)
+    _SYS_REF.set(sys)
       .then(() => badge('synced', '동기화됨'))
-      .catch(() => badge('error', '저장 실패'));
+      .catch(e => { badge('error', '저장 실패'); console.error(e); });
   }, 1500);
 };
 
 /* ── 이미지 저장 ── */
 window.pushImages = function() {
   if (!_ready) return;
-  _IMGS_REF.set(window.imgStore || {})
-    .then(() => badge('synced', '동기화됨'))
-    .catch(e => console.warn('이미지 저장 실패', e));
+  const imgs = window.imgStore || {};
+  _IMGS_REF.set(imgs).catch(e => console.warn('이미지 저장 실패', e));
 };
 
-/* ── syncImgStore (addImgDOM에서 호출) ── */
+/* ── syncImgStore ── */
 window.syncImgStore = function(sid) {
   const grid = document.getElementById('ig-' + sid);
   if (!grid) return;
@@ -1789,12 +1809,22 @@ window.syncImgStore = function(sid) {
   window.pushImages();
 };
 
+/* ── readFile 오버라이드 (압축) ── */
+window.readFile = function(f, sid) {
+  compress(f).then(src => {
+    if (typeof addImgDOM === 'function') addImgDOM(sid, src, '', false);
+  });
+};
+
 /* ── 실시간 리스너 ── */
 function listen() {
   _SYS_REF.on('value', snap => {
     if (_suppress) { _suppress = false; return; }
-    const d = snap.val(); if (!d) return;
-    window.SYSTEMS = d;
+    const raw = snap.val();
+    if (!raw) return;
+    const normalized = normSystems(raw);
+    if (!normalized.length) return; // 빈 데이터 무시
+    window.SYSTEMS = normalized;
     if (_typing) return;
     const sy = window.scrollY;
     if (typeof renderSysTabs === 'function') renderSysTabs();
@@ -1805,8 +1835,10 @@ function listen() {
   });
 
   _IMGS_REF.on('value', snap => {
-    const imgs = snap.val(); if (!imgs) return;
-    Object.assign(window.imgStore || {}, imgs);
+    const imgs = snap.val();
+    if (!imgs) return;
+    if (!window.imgStore) window.imgStore = {};
+    Object.assign(window.imgStore, imgs);
     Object.keys(imgs).forEach(sid => {
       const grid = document.getElementById('ig-' + sid);
       if (!grid) return;
@@ -1815,7 +1847,7 @@ function listen() {
       grid.innerHTML = '';
       if (ph) ph.style.display = 'none';
       if (zone) zone.classList.add('has');
-      (imgs[sid] || []).forEach(img => {
+      toArr(imgs[sid]).forEach(img => {
         if (typeof addImgDOM === 'function') addImgDOM(sid, img.src, img.caption, true);
       });
     });
@@ -1823,44 +1855,94 @@ function listen() {
 
   _db.ref('.info/connected').on('value', snap => {
     if (!snap.val()) return;
-    _myRef = _ONL_REF.push();
-    _myRef.set({ t: Date.now() });
-    _myRef.onDisconnect().remove();
+    const ref = _ONL_REF.push();
+    ref.set({ t: Date.now() });
+    ref.onDisconnect().remove();
   });
   _ONL_REF.on('value', snap => usersEl(snap.numChildren ? snap.numChildren() : 0));
 }
 
-/* ── 초기화 메인 ── */
-async function init() {
+/* ── 오류 모달 ── */
+function showErr(msg) {
+  let m = document.getElementById('m-fb-err');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'm-fb-err'; m.className = 'mov';
+    m.innerHTML = `<div class="modal" style="min-width:440px;max-width:540px;">
+      <div class="mhd"><h3>🔴 Firebase 연결 실패</h3>
+        <button class="mclose" onclick="document.getElementById('m-fb-err').classList.remove('show')">✕</button>
+      </div>
+      <div class="mbody">
+        <p id="fb-err-txt" style="font-size:13px;color:var(--tx-sub);margin-bottom:14px;"></p>
+        <div style="background:var(--surface2);border-radius:8px;padding:14px;font-size:13px;line-height:1.9;border-left:3px solid var(--accent);">
+          <strong>🔧 체크리스트</strong><br>
+          ① <a href="https://console.firebase.google.com/project/guide-4a26e/database/guide-4a26e-default-rtdb/rules"
+             target="_blank" style="color:var(--accent)">Firebase 규칙 탭 열기 ↗</a><br>
+          &nbsp;&nbsp;<code>".read": true, ".write": true</code> 로 설정 후 게시<br>
+          ② 인터넷 연결 확인<br>
+          ③ 아래 재연결 버튼 클릭
+        </div>
+      </div>
+      <div class="mfoot"><div></div>
+        <div class="mfoot-right">
+          <button class="btn-s gh" onclick="document.getElementById('m-fb-err').classList.remove('show')">닫기</button>
+          <button class="btn-s pri" id="btn-retry-fb">🔄 재연결</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    document.getElementById('btn-retry-fb').addEventListener('click', () => {
+      m.classList.remove('show');
+      fbInit().then(() => { if(typeof render==='function') render(); });
+    });
+  }
+  const t = document.getElementById('fb-err-txt');
+  if (t) t.textContent = msg || '연결에 실패했습니다.';
+  m.classList.add('show');
+}
+
+/* ── Firebase 메인 초기화 ── */
+async function fbInit() {
   badge('pending', '연결 중...');
+  _ready = false;
   try {
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 12000));
 
     /* 1) SYSTEMS 로드 */
     const sysSnap = await Promise.race([_SYS_REF.once('value'), timeout]);
-    const sysData = sysSnap.val();
+    const raw = sysSnap.val();
 
-    if (sysData) {
-      window.SYSTEMS = sysData;
+    if (raw) {
+      const normalized = normSystems(raw);
+      if (normalized.length > 0) {
+        window.SYSTEMS = normalized;
+      }
+      // else: Firebase에 빈 데이터 → 현재 SYSTEMS 유지
     } else {
       /* Firebase 비어있음 → 현재 SYSTEMS 업로드 */
-      badge('pending', '초기 업로드 중...');
-      _suppress = true;
-      await _SYS_REF.set(window.SYSTEMS);
-      if (window.imgStore && Object.keys(window.imgStore).length)
-        await _IMGS_REF.set(window.imgStore);
+      const cur = window.SYSTEMS;
+      if (cur && Array.isArray(cur) && cur.length > 0) {
+        badge('pending', '초기 업로드 중...');
+        _suppress = true;
+        await _SYS_REF.set(cur);
+      }
     }
 
     /* 2) 이미지 로드 */
     const imgSnap = await _IMGS_REF.once('value');
     const imgData = imgSnap.val();
-    if (imgData) Object.assign(window.imgStore = window.imgStore || {}, imgData);
+    if (imgData) {
+      if (!window.imgStore) window.imgStore = {};
+      Object.assign(window.imgStore, imgData);
+    }
 
-    /* 3) activeSysId / activeCatId 갱신 */
+    /* 3) activeSysId 동기화 */
     if (window.SYSTEMS && window.SYSTEMS.length) {
-      window.activeSysId = window.activeSysId || window.SYSTEMS[0].id;
-      const sys = window.SYSTEMS.find(s => s.id === window.activeSysId) || window.SYSTEMS[0];
-      window.activeCatId = window.activeCatId || (sys.cats && sys.cats[0] && sys.cats[0].id) || '';
+      const found = window.SYSTEMS.find(s => s.id === window.activeSysId);
+      if (!found) {
+        window.activeSysId = window.SYSTEMS[0].id;
+        window.activeCatId = window.SYSTEMS[0].cats?.[0]?.id || '';
+      }
     }
 
     _ready = true;
@@ -1868,67 +1950,19 @@ async function init() {
     listen();
 
   } catch(err) {
-    console.error('[Firebase 연결 실패]', err.code || err.message);
+    console.error('[Firebase]', err.code || err.message);
     badge('error', '연결 실패 (클릭)');
-    showErrModal(err);
+    const code = err.code || err.message || '';
+    if (code.includes('PERMISSION_DENIED') || code.includes('permission'))
+      showErr('권한 오류 — Firebase 규칙을 테스트 모드로 변경해 주세요.');
+    else if (code.includes('TIMEOUT'))
+      showErr('연결 시간 초과 — 인터넷 연결을 확인해 주세요.');
+    else
+      showErr('연결 실패: ' + (err.message || code));
   }
 }
 
-/* ── 오류 모달 ── */
-function showErrModal(err) {
-  const code = (err && (err.code || err.message)) || '';
-  let msg = '연결에 실패했습니다. 아래를 확인하세요.';
-  if (code.includes('PERMISSION_DENIED') || code.includes('permission'))
-    msg = '권한 오류 — Firebase 규칙을 테스트 모드로 변경해 주세요.';
-  else if (code.includes('TIMEOUT'))
-    msg = '연결 시간 초과 — 인터넷 연결 및 Firebase 설정을 확인해 주세요.';
-
-  let modal = document.getElementById('m-fb-err');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'm-fb-err';
-    modal.className = 'mov';
-    modal.innerHTML = `
-      <div class="modal" style="min-width:440px;max-width:540px;">
-        <div class="mhd"><h3>🔴 Firebase 연결 실패</h3>
-          <button class="mclose" onclick="document.getElementById('m-fb-err').classList.remove('show')">✕</button>
-        </div>
-        <div class="mbody">
-          <p id="fb-err-txt" style="font-size:13px;color:var(--tx-sub);margin-bottom:14px;"></p>
-          <div style="background:var(--surface2);border-radius:8px;padding:14px;font-size:13px;line-height:1.9;border-left:3px solid var(--accent);">
-            <strong>🔧 체크리스트</strong><br>
-            ① <a href="https://console.firebase.google.com/project/guide-4a26e/database/guide-4a26e-default-rtdb/rules"
-               target="_blank" style="color:var(--accent)">Firebase 규칙 탭 열기 ↗</a><br>
-            &nbsp;&nbsp;→ <code>".read": true, ".write": true</code> 로 설정 후 게시<br>
-            ② 인터넷 연결 확인<br>
-            ③ 아래 재연결 버튼 클릭
-          </div>
-        </div>
-        <div class="mfoot"><div></div>
-          <div class="mfoot-right">
-            <button class="btn-s gh" onclick="document.getElementById('m-fb-err').classList.remove('show')">닫기</button>
-            <button class="btn-s pri" id="btn-retry-fb">🔄 재연결</button>
-          </div>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-    document.getElementById('btn-retry-fb').addEventListener('click', async () => {
-      modal.classList.remove('show');
-      await init();
-      if (typeof render === 'function') render();
-    });
-  }
-  document.getElementById('fb-err-txt').textContent = msg;
-  modal.classList.add('show');
-}
-
-/* ── sync-badge 클릭 → 재연결 ── */
-const sb = document.getElementById('sync-badge');
-if (sb) sb.addEventListener('click', () => {
-  if (!_ready) { init().then(() => { if(typeof render==='function') render(); }); }
-});
-
-/* ── 파일 가져오기 (기존 importFromOldFile 오버라이드) ── */
+/* ── 파일 가져오기 ── */
 window.importFromOldFile = function() {
   if (!confirm('다른 파일의 데이터를 Firebase에 덮어씁니다.\n모든 팀원의 화면이 해당 데이터로 교체됩니다.\n계속하시겠습니까?')) return;
   const inp = document.createElement('input');
@@ -1940,16 +1974,15 @@ window.importFromOldFile = function() {
       const doc = new DOMParser().parseFromString(txt, 'text/html');
       const ds  = doc.getElementById('data-store');
       if (!ds || !ds.textContent.trim()) {
-        alert('저장된 데이터가 없습니다. 💾 HTML 저장을 먼저 눌러주세요.'); return;
+        alert('저장된 데이터가 없습니다.\n💾 HTML 저장을 먼저 눌러주세요.'); return;
       }
       const sv = JSON.parse(ds.textContent);
       if (!sv.systems && !sv.cats) { alert('데이터 형식 오류'); return; }
-      if (sv.cats && !sv.systems) sv.systems = [{ id: 'x1', label: 'OAS', cats: sv.cats }];
-      window.SYSTEMS  = sv.systems;
+      if (sv.cats && !sv.systems) sv.systems = [{ id:'x1', label:'OAS', cats: sv.cats }];
+      window.SYSTEMS  = normSystems(sv.systems);
       window.imgStore = sv.imgStore || {};
       window.activeSysId = window.SYSTEMS[0]?.id || '';
       window.activeCatId = window.SYSTEMS[0]?.cats?.[0]?.id || '';
-
       if (_ready) {
         badge('pending', '업로드 중...');
         _suppress = true;
@@ -1957,29 +1990,28 @@ window.importFromOldFile = function() {
         if (Object.keys(window.imgStore).length) await _IMGS_REF.set(window.imgStore);
         badge('synced', '동기화됨');
         if (typeof render === 'function') render();
-        alert('✅ Firebase에 데이터를 업로드했습니다.\n모든 팀원 화면이 자동 갱신됩니다.');
+        alert('✅ Firebase에 업로드 완료\n모든 팀원 화면이 자동 갱신됩니다.');
       } else {
         if (typeof render === 'function') render();
-        alert('⚠️ 오프라인 상태입니다.\n현재 화면에만 반영됐습니다. 재연결 후 다시 시도하세요.');
+        alert('⚠️ 오프라인 상태\n인터넷 연결 후 재연결 버튼을 눌러주세요.');
       }
     } catch(err) { alert('파일 읽기 실패: ' + err.message); }
   };
   inp.click();
 };
 
-/* ── readFile 오버라이드 (압축 적용) ── */
-window.readFile = function(f, sid) {
-  compress(f).then(src => {
-    if (typeof addImgDOM === 'function') addImgDOM(sid, src, '', false);
-  });
-};
+/* ── sync-badge 클릭 → 재연결 ── */
+const _sb = document.getElementById('sync-badge');
+if (_sb) _sb.addEventListener('click', () => {
+  if (!_ready) fbInit().then(() => { if(typeof render==='function') render(); });
+});
 
 /* ── 타이핑 중 리렌더 방지 ── */
 document.addEventListener('focusin',  e => { if (e.target.matches('input,textarea')) _typing = true; });
 document.addEventListener('focusout', e => { if (e.target.matches('input,textarea')) _typing = false; });
 
 /* ── 실행 ── */
-init().then(() => { if (typeof render === 'function') render(); });
+fbInit().then(() => { if (typeof render === 'function') render(); });
 
 })(); // end IIFE
 </script>
