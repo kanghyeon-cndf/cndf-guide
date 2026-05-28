@@ -877,34 +877,6 @@ textarea.fi{resize:vertical;min-height:80px;}
 
 <!-- ── MODALS ── -->
 
-
-<!-- FIREBASE ERROR MODAL -->
-<div class="mov" id="m-fb-error">
-  <div class="modal" style="min-width:420px;max-width:520px;">
-    <div class="mhd">
-      <h3>🔴 Firebase 연결 실패</h3>
-      <button class="mclose" data-close="m-fb-error">✕</button>
-    </div>
-    <div class="mbody">
-      <p style="font-size:13px;color:var(--tx-sub);margin-bottom:16px;" id="fb-err-msg">연결에 실패했습니다.</p>
-      <div style="background:var(--surface2);border-radius:8px;padding:16px;font-size:13px;line-height:1.9;border-left:3px solid var(--accent);">
-        <strong>🔧 체크리스트</strong><br>
-        ① <a href="https://console.firebase.google.com/project/guide-4a26e/database/guide-4a26e-default-rtdb/rules" target="_blank" style="color:var(--accent);">Firebase 규칙 탭 열기 ↗</a><br>
-        &nbsp;&nbsp;→ <code style="font-size:12px;">".read": true, ".write": true</code> 로 설정 후 게시<br>
-        ② 인터넷 연결 상태 확인<br>
-        ③ 아래 "재연결" 버튼 클릭
-      </div>
-    </div>
-    <div class="mfoot">
-      <div></div>
-      <div class="mfoot-right">
-        <button class="btn-s gh" data-close="m-fb-error">닫기</button>
-        <button class="btn-s pri" id="btn-retry-fb">🔄 재연결</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- CONFIRM -->
 <div class="mov" id="m-confirm">
   <div class="modal" style="min-width:340px;">
@@ -1428,7 +1400,6 @@ $('main').addEventListener('change',e=>{if(e.target.classList.contains('ck')) up
 $('btn-add-cat').addEventListener('click',openAddCat);
 $('btn-print').addEventListener('click',()=>window.print());
 $('btn-save').addEventListener('click',saveGuide);
-$('sync-badge').addEventListener('click',()=>{if(!_fbReady) openM('m-fb-error');});
 $('btn-import').addEventListener('click',importFromOldFile);
 document.addEventListener('click',e=>{
   const cl=e.target.closest('[data-close]');if(cl) closeM(cl.dataset.close);
@@ -1708,13 +1679,10 @@ function saveGuide(){
 }
 
 /* ════ INIT ════ */
-// Firebase로 비동기 초기화
-(async () => {
-  initData(); // 로컬 기본값 먼저 설정 (Firebase 로딩 전 빈 화면 방지)
-  render();   // 초기 렌더
-  await initFirebase(); // Firebase 데이터 로드
-  render();   // Firebase 데이터로 재렌더
-})();
+// 1단계: 로컬 데이터로 즉시 렌더 (Firebase 연결 전 화면 표시)
+initData();
+render();
+// 2단계: Firebase 초기화는 Firebase 블록에서 처리 (스크립트 하단)
 
 /* ════════════════════════════════════════
    FIREBASE REALTIME SYNC
@@ -1726,14 +1694,9 @@ const FB_CONFIG = {
   projectId: "guide-4a26e",
   appId: "1:940171197943:web:e9c62d8bc02d760af942f2"
 };
-(function(){
-  try {
-    firebase.app(); // 이미 초기화 됐으면 재사용
-  } catch(e) {
-    firebase.initializeApp(FB_CONFIG);
-  }
-})();
-const db = firebase.database();
+// Firebase 초기화 (중복 방지)
+try { firebase.app(); } catch(e) { firebase.initializeApp(FB_CONFIG); }
+const db        = firebase.database();
 const SYS_REF   = db.ref('guide/systems');
 const IMGS_REF  = db.ref('guide/images');
 const ONLINE_REF = db.ref('guide/online');
@@ -1750,8 +1713,6 @@ function setSyncBadge(state, text) {
   if (!badge) return;
   badge.className = 'sync-badge ' + state;
   badge.querySelector('.sb-text').textContent = text;
-  badge.title = (state === 'error' || state === 'offline')
-    ? '클릭하여 재연결 시도' : '';
 }
 
 /* ── Compress image with Canvas ── */
@@ -1777,7 +1738,7 @@ function compressImage(file) {
 
 /* ── Write SYSTEMS to Firebase (debounced 1.5s) ── */
 function scheduleWrite() {
-  if (!_fbReady) return;
+  if (!_fbReady || !SYS_REF) return;
   clearTimeout(_writeTimer);
   setSyncBadge('pending', '저장 중...');
   _writeTimer = setTimeout(() => {
@@ -1790,7 +1751,7 @@ function scheduleWrite() {
 
 /* ── Write imgStore to Firebase ── */
 function pushImages() {
-  if (!_fbReady) return;
+  if (!_fbReady || !IMGS_REF) return;
   setSyncBadge('pending', '이미지 저장 중...');
   IMGS_REF.set(imgStore)
     .then(() => setSyncBadge('synced', '동기화됨'))
@@ -1953,6 +1914,19 @@ function importFromOldFile() {
 document.addEventListener('focusin',  e => { if(e.target.matches('input,textarea')) _activeInput = true; });
 document.addEventListener('focusout', e => { if(e.target.matches('input,textarea')) _activeInput = false; });
 
+/* ── Firebase 블록 완전 파싱 후 실행 (SYS_REF, db 모두 준비된 시점) ── */
+(async () => {
+  if (location.protocol === 'file:') {
+    setSyncBadge('offline', '파일 직접 열기 불가');
+    setTimeout(() => {
+      const m = document.getElementById('m-file-protocol');
+      if (m) m.classList.add('show');
+    }, 400);
+    return;
+  }
+  await initFirebase();
+  render();
+})();
 </script>
 
 </body></html>
