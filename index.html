@@ -378,6 +378,15 @@ textarea.fi{resize:vertical;min-height:80px;}
   border:5px solid transparent;border-top-color:rgba(18,28,48,.93);}
 .ann-badge:hover .ann-tip{opacity:1;}
 .ann-badge.no-tip .ann-tip{display:none;}
+/* 툴팁 아래 방향 반전 */
+.ann-badge.tip-below .ann-tip,
+.lb-badge.tip-below .ann-tip{
+  bottom:auto;top:calc(100% + 8px);}
+.ann-badge.tip-below .ann-tip::after,
+.lb-badge.tip-below .ann-tip::after{
+  top:auto;bottom:100%;
+  border-top-color:transparent;
+  border-bottom-color:rgba(18,28,48,.93);}
 .ii-zoom-btn{
   position:absolute;top:6px;left:6px;
   background:rgba(0,0,0,.52);color:#fff;
@@ -416,6 +425,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 .lb-badge.ann-drag{cursor:grabbing;opacity:.8;}
 .lb-badge:hover .ann-tip{opacity:1;}
 .lb-badge.no-tip .ann-tip{display:none;}
+/* lb 아래 반전은 위 공통 규칙에서 처리 */
 #lb-close{
   position:fixed;top:14px;right:18px;
   width:36px;height:36px;
@@ -429,7 +439,14 @@ textarea.fi{resize:vertical;min-height:80px;}
   position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
   background:rgba(255,255,255,.1);color:rgba(255,255,255,.78);
   padding:6px 18px;border-radius:20px;font-size:12px;
-  pointer-events:none;z-index:8010;white-space:nowrap;}
+  pointer-events:none;z-index:8010;white-space:nowrap;
+  transition:opacity .2s;}
+#lb-zoom-badge{
+  position:fixed;top:14px;left:18px;
+  background:rgba(0,0,0,.45);color:#fff;
+  padding:4px 10px;border-radius:5px;font-size:12px;font-weight:600;
+  pointer-events:none;z-index:8010;display:none;}
+#lb-zoom-badge.show{display:block;}
 /* Annotation editor popup */
 #ann-popup{
   position:fixed;display:none;
@@ -1123,11 +1140,12 @@ textarea.fi{resize:vertical;min-height:80px;}
 <!-- LIGHTBOX -->
 <div id="lb-ov">
   <button id="lb-close">✕</button>
+  <div id="lb-zoom-badge">1×</div>
   <div id="lb-inner">
     <img id="lb-img" src="" alt="">
     <div id="lb-ann-layer"></div>
   </div>
-  <div id="lb-hint">이미지 클릭 → 번호 추가 &nbsp;|&nbsp; 번호 드래그 → 이동 &nbsp;|&nbsp; 번호 클릭 → 설명 편집</div>
+  <div id="lb-hint">클릭 → 번호 추가 &nbsp;|&nbsp; 스크롤 → 확대/축소 &nbsp;|&nbsp; 번호 클릭 → 설명 편집</div>
 </div>
 <!-- ANNOTATION POPUP -->
 <div id="ann-popup">
@@ -1552,6 +1570,29 @@ function mkAnnBadge(cls,x,y,num,desc){
   if(desc){const t=document.createElement('div');t.className='ann-tip';t.textContent=desc;b.appendChild(t);}
   return b;
 }
+function setupTooltipDir(badge,container){
+  badge.addEventListener('mouseenter',function(){
+    const tip=badge.querySelector('.ann-tip');
+    if(!tip)return;
+    const cRect=container.getBoundingClientRect();
+    const topPx =parseFloat(badge.style.top) /100*cRect.height;
+    const leftPx=parseFloat(badge.style.left)/100*cRect.width;
+    const tipH=tip.offsetHeight||72;
+    const tipW=220;
+    // 수직: 위 공간 부족 시 아래로 반전
+    badge.classList.toggle('tip-below',topPx<tipH+20);
+    // 수평: 좌우 끝에서 툴팁이 잘리지 않도록 nudge
+    const half=tipW/2;
+    let shift=0;
+    if(leftPx<half+8)            shift= half-leftPx+8;
+    else if(cRect.width-leftPx<half+8) shift=-(half-(cRect.width-leftPx)+8);
+    tip.style.transform=`translateX(calc(-50% + ${shift}px))`;
+  });
+  badge.addEventListener('mouseleave',function(){
+    const tip=badge.querySelector('.ann-tip');
+    if(tip)tip.style.transform='';
+  });
+}
 var _annCb=null;
 function openAnnPopup(badge,onSave,onDelete){
   closeAnnPopup();
@@ -1560,11 +1601,17 @@ function openAnnPopup(badge,onSave,onDelete){
   _annCb={onSave,onDelete};
   const vw=window.innerWidth,vh=window.innerHeight;
   const r=badge.getBoundingClientRect();
-  let top=r.bottom+8,left=r.left-10;
-  if(top+175>vh)top=r.top-180;
-  if(left+230>vw)left=vw-236;
-  if(left<4)left=4;
-  if(top<4)top=4;
+  let top,left;
+  if(r.width===0&&r.height===0){
+    // 배지가 아직 렌더링되지 않은 경우 중앙 fallback
+    top=Math.max(4,vh/2-90);left=Math.max(4,vw/2-115);
+  }else{
+    top=r.bottom+8;left=r.left-10;
+    if(top+175>vh)top=r.top-180;
+    if(left+230>vw)left=vw-236;
+    if(left<4)left=4;
+    if(top<4)top=4;
+  }
   popup.style.top=top+'px';popup.style.left=left+'px';
   popup.classList.add('show');
   setTimeout(()=>$('ann-ta').focus(),30);
@@ -1572,9 +1619,11 @@ function openAnnPopup(badge,onSave,onDelete){
 function closeAnnPopup(){$('ann-popup').classList.remove('show');_annCb=null;}
 function buildAnnLayer(layer,annotations,sid,itemEl){
   layer.innerHTML='';
+  const wrap=itemEl.querySelector('.ii-wrap');
   (annotations||[]).forEach((ann,i)=>{
     const b=mkAnnBadge('ann-badge',ann.x,ann.y,i+1,ann.desc);
-    const isDrag=makeDraggable(b,itemEl.querySelector('.ii-wrap'),()=>syncImgStore(sid));
+    const isDrag=makeDraggable(b,wrap,()=>syncImgStore(sid));
+    setupTooltipDir(b,wrap);
     b.addEventListener('click',function(e){
       if(isDrag())return;
       e.stopPropagation();
@@ -1588,9 +1637,11 @@ function buildAnnLayer(layer,annotations,sid,itemEl){
 }
 function addAnnBadge(sid,itemEl){
   const layer=itemEl.querySelector('.ii-ann-layer');if(!layer)return;
+  const wrap=itemEl.querySelector('.ii-wrap');
   const num=layer.children.length+1;
   const b=mkAnnBadge('ann-badge',50,50,num,'');
-  const isDrag=makeDraggable(b,itemEl.querySelector('.ii-wrap'),()=>syncImgStore(sid));
+  const isDrag=makeDraggable(b,wrap,()=>syncImgStore(sid));
+  setupTooltipDir(b,wrap);
   b.addEventListener('click',function(e){
     if(isDrag())return;
     e.stopPropagation();
@@ -1608,11 +1659,36 @@ function addAnnBadge(sid,itemEl){
 }
 /* ════ LIGHTBOX ════ */
 var _lbState=null;
+var _lbZoom={scale:1,x:0,y:0};
+var _lbPan=null,_lbPanMoved=false;
+function applyLbTransform(){
+  const inner=$('lb-inner');
+  inner.style.transform=`translate(${_lbZoom.x}px,${_lbZoom.y}px) scale(${_lbZoom.scale})`;
+  if(!_lbPan) inner.style.cursor=_lbZoom.scale>1?'grab':'crosshair';
+  const zb=$('lb-zoom-badge');
+  if(_lbZoom.scale>1){
+    zb.textContent=_lbZoom.scale.toFixed(1)+'×';
+    zb.classList.add('show');
+  }else{
+    zb.classList.remove('show');
+  }
+  $('lb-hint').textContent=_lbZoom.scale>1
+    ?'스크롤 → 확대/축소  |  드래그 → 이동  |  더블클릭 → 원래 크기  |  번호 클릭 → 설명 편집'
+    :'클릭 → 번호 추가  |  스크롤 → 확대/축소  |  번호 클릭 → 설명 편집';
+}
+function resetLbZoom(){
+  _lbZoom={scale:1,x:0,y:0};
+  $('lb-inner').style.transform='';
+  $('lb-inner').style.cursor='crosshair';
+  $('lb-zoom-badge').classList.remove('show');
+  $('lb-hint').textContent='클릭 → 번호 추가  |  스크롤 → 확대/축소  |  번호 클릭 → 설명 편집';
+}
 function openLightbox(sid,imgIdx){
   _lbState={sid,imgIdx};
   const entry=(imgStore[sid]||[])[imgIdx];if(!entry)return;
   $('lb-img').src=entry.src;
   buildLbLayer(entry.annotations||[]);
+  resetLbZoom();
   $('lb-ov').classList.add('show');
   document.body.style.overflow='hidden';
 }
@@ -1624,6 +1700,7 @@ function _addLbBadgeEl(x,y,desc,num){
   const layer=$('lb-ann-layer'),container=$('lb-inner');
   const b=mkAnnBadge('lb-badge',x,y,num||(layer.children.length+1),desc);
   const isDrag=makeDraggable(b,container,()=>flushLbToSource());
+  setupTooltipDir(b,container);
   b.addEventListener('click',function(e){
     if(isDrag())return;
     e.stopPropagation();
@@ -1783,7 +1860,10 @@ document.addEventListener('click',function(e){
 /* ── Lightbox ── */
 $('lb-close').addEventListener('click',closeLightbox);
 $('lb-ov').addEventListener('click',function(e){if(e.target===$('lb-ov'))closeLightbox();});
+/* 번호 추가 클릭 (줌 1× 일 때, 팬 이동 후가 아닐 때) */
 $('lb-inner').addEventListener('click',function(e){
+  if(_lbPanMoved){_lbPanMoved=false;return;}
+  if(_lbZoom.scale>1)return; // 줌 상태에서는 클릭으로 번호 추가 안 함
   if(e.target===$('lb-inner')||e.target===$('lb-img')||e.target===$('lb-ann-layer')){
     const rect=$('lb-inner').getBoundingClientRect();
     const x=(e.clientX-rect.left)/rect.width*100;
@@ -1795,6 +1875,54 @@ $('lb-inner').addEventListener('click',function(e){
       ()=>{b.remove();renumLayer($('lb-ann-layer'));flushLbToSource();closeAnnPopup();}
     ),30);
   }
+});
+/* 더블클릭 → 줌 리셋 */
+$('lb-inner').addEventListener('dblclick',function(e){
+  e.stopPropagation();
+  resetLbZoom();
+});
+/* 스크롤 줌 */
+$('lb-ov').addEventListener('wheel',function(e){
+  if(!$('lb-ov').classList.contains('show'))return;
+  e.preventDefault();
+  const FACTOR=1.15,MIN=1,MAX=8;
+  const dir=e.deltaY<0?FACTOR:1/FACTOR;
+  const newScale=Math.min(MAX,Math.max(MIN,_lbZoom.scale*dir));
+  if(newScale===_lbZoom.scale)return;
+  const ovRect=$('lb-ov').getBoundingClientRect();
+  const cx=e.clientX-ovRect.left-ovRect.width/2;
+  const cy=e.clientY-ovRect.top-ovRect.height/2;
+  const r=newScale/_lbZoom.scale;
+  _lbZoom.x=cx*(1-r)+_lbZoom.x*r;
+  _lbZoom.y=cy*(1-r)+_lbZoom.y*r;
+  _lbZoom.scale=newScale;
+  if(newScale===1){_lbZoom.x=0;_lbZoom.y=0;}
+  applyLbTransform();
+},{passive:false});
+/* 드래그 팬 (줌 상태에서) */
+$('lb-inner').addEventListener('mousedown',function(e){
+  if(e.button!==0)return;
+  if(_lbZoom.scale<=1)return;
+  if(e.target.classList.contains('lb-badge')||e.target.closest&&e.target.closest('.lb-badge'))return;
+  e.preventDefault();
+  _lbPan={sx:e.clientX,sy:e.clientY,ox:_lbZoom.x,oy:_lbZoom.y};
+  _lbPanMoved=false;
+  $('lb-inner').style.cursor='grabbing';
+  function onMove(me){
+    if(!_lbPan)return;
+    const dx=me.clientX-_lbPan.sx,dy=me.clientY-_lbPan.sy;
+    if(Math.abs(dx)>3||Math.abs(dy)>3)_lbPanMoved=true;
+    _lbZoom.x=_lbPan.ox+dx;_lbZoom.y=_lbPan.oy+dy;
+    applyLbTransform();
+  }
+  function onUp(){
+    _lbPan=null;
+    $('lb-inner').style.cursor=_lbZoom.scale>1?'grab':'crosshair';
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+  }
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
@@ -2118,10 +2246,11 @@ var SYS_REF   = DB.ref('guide/systems');
 var IMGS_REF  = DB.ref('guide/images');
 var ONLINE_REF = DB.ref('guide/online');
 
-var _ready      = false;
-var _suppress   = false;
-var _typing     = false;
-var _writeTimer = null;
+var _ready        = false;
+var _suppress     = false;
+var _suppressImgs = false;
+var _typing       = false;
+var _writeTimer   = null;
 
 /* ─────────────────────────────────────────
    BADGE
@@ -2335,9 +2464,11 @@ window.scheduleWrite = function() {
 ───────────────────────────────────────── */
 window.pushImages = function() {
   if (!_ready) return;
+  _suppressImgs = true;
   IMGS_REF.set(window.imgStore || {}).then(function() {
     badge('synced', '동기화됨');
   }).catch(function(e) {
+    _suppressImgs = false;
     console.warn('[Firebase] 이미지 저장 실패:', e.message);
   });
 };
@@ -2460,6 +2591,7 @@ function startListening() {
 
   /* 이미지 리스너 */
   IMGS_REF.on('value', function(snap) {
+    if (_suppressImgs) { _suppressImgs = false; return; }
     var imgs = snap.val(); if (!imgs) return;
     if (!window.imgStore) window.imgStore = {};
     Object.assign(window.imgStore, imgs);
