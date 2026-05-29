@@ -196,9 +196,9 @@ code{font-family:'JetBrains Mono',monospace;background:var(--surface2);
 .iz-ph .ico{font-size:24px;margin-bottom:4px;}
 .iz-ph p{font-size:12px;margin-top:2px;}
 .iz input[type=file]{display:none;}
-.ig{display:flex;flex-wrap:wrap;gap:8px;}
+.ig{display:flex;flex-direction:column;gap:10px;}
 .ii{position:relative;border:1px solid var(--border);border-radius:7px;
-  overflow:hidden;width:calc(50% - 4px);background:var(--surface);}
+  overflow:hidden;width:100%;background:var(--surface);}
 .ii img{width:100%;display:block;}
 .ii-cap{padding:5px 8px;font-size:12px;color:var(--tx-sub);
   border-top:1px solid var(--border);outline:none;
@@ -328,8 +328,125 @@ textarea.fi{resize:vertical;min-height:80px;}
 .users-badge{display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:5px;
   font-size:11px;font-weight:600;color:rgba(255,255,255,.75);
   border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);}
-@media print{#sb,#hdr,.toolbar,.sc-hd-acts,.ia-btn,.ii-del,.iz-ph{display:none!important;}
-  #main{margin:0;}.page{display:block!important;padding:16px;}.sc{break-inside:avoid;}}
+/* ── Collapsible blocks ── */
+.blk-wrap{margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.blk-wrap:last-of-type{margin-bottom:0;}
+.blk-hd{display:flex;align-items:center;gap:8px;padding:9px 14px;
+  background:var(--surface2);cursor:pointer;user-select:none;
+  list-style:none;font-size:13px;font-weight:600;color:var(--primary);
+  border:none;outline:none;}
+.blk-hd::-webkit-details-marker{display:none;}
+.blk-hd::marker{content:'';}
+.blk-hd:hover{background:var(--accent-soft);}
+.blk-ico{font-size:14px;flex-shrink:0;}
+.blk-ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.blk-arrow{font-size:10px;color:var(--tx-m);flex-shrink:0;
+  transition:transform .18s;transform:rotate(0deg);}
+.blk-wrap:not([open]) .blk-arrow{transform:rotate(-90deg);}
+.blk-body{padding:14px 16px;}
+@media print{#sb,#hdr,.toolbar,.sc-hd-acts,.ia-btn,.ii-del,.iz-ph,.ii-zoom-btn,.ii-ann-add-btn,#lb-ov,#ann-popup{display:none!important;}
+  #main{margin:0;}.page{display:block!important;padding:16px;}.sc{break-inside:avoid;}
+  .blk-wrap{border:none;}.blk-hd{display:none;}.blk-wrap:not([open]) .blk-body{display:block!important;}}
+/* ── IMAGE ANNOTATION & LIGHTBOX ── */
+.ii{overflow:visible;}
+.ii-wrap{position:relative;line-height:0;display:block;overflow:hidden;border-radius:7px 7px 0 0;}
+.ii-wrap img{width:100%;display:block;}
+.ii-ann-layer{position:absolute;inset:0;pointer-events:none;}
+.ann-badge{
+  position:absolute;width:22px;height:22px;
+  background:var(--accent);color:#fff;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.45);
+  font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  transform:translate(-50%,-50%);
+  cursor:grab;pointer-events:all;user-select:none;z-index:10;
+  transition:transform .12s,box-shadow .12s;}
+.ann-badge:hover{transform:translate(-50%,-50%) scale(1.3);box-shadow:0 3px 10px rgba(0,0,0,.5);}
+.ann-badge.ann-drag{cursor:grabbing;transform:translate(-50%,-50%) scale(1.3);opacity:.8;}
+.ann-tip{
+  position:absolute;bottom:calc(100% + 8px);left:50%;
+  transform:translateX(-50%);
+  background:rgba(18,28,48,.93);color:#fff;
+  border-radius:7px;padding:7px 11px;
+  font-size:11px;font-weight:400;white-space:pre-wrap;
+  max-width:220px;min-width:80px;text-align:center;line-height:1.5;
+  pointer-events:none;opacity:0;transition:opacity .15s;
+  z-index:100;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+.ann-tip::after{
+  content:'';position:absolute;top:100%;left:50%;
+  transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:rgba(18,28,48,.93);}
+.ann-badge:hover .ann-tip{opacity:1;}
+.ann-badge.no-tip .ann-tip{display:none;}
+.ii-zoom-btn{
+  position:absolute;top:6px;left:6px;
+  background:rgba(0,0,0,.52);color:#fff;
+  border:none;border-radius:5px;padding:3px 8px;
+  font-size:13px;cursor:pointer;
+  opacity:0;transition:opacity .14s;z-index:15;line-height:1.5;}
+.ii:hover .ii-zoom-btn{opacity:1;}
+.ii-ann-add-btn{
+  position:absolute;top:6px;right:28px;
+  background:var(--accent);color:#fff;
+  border:none;border-radius:5px;padding:3px 7px;
+  font-size:10px;font-weight:700;cursor:pointer;
+  opacity:0;transition:opacity .14s;z-index:15;line-height:1.5;}
+.ii:hover .ii-ann-add-btn{opacity:1;}
+/* Lightbox */
+#lb-ov{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.88);z-index:8000;
+  align-items:center;justify-content:center;}
+#lb-ov.show{display:flex;}
+#lb-inner{position:relative;cursor:crosshair;line-height:0;}
+#lb-inner img{
+  display:block;max-width:92vw;max-height:90vh;
+  border-radius:6px;user-select:none;pointer-events:none;}
+#lb-ann-layer{position:absolute;inset:0;pointer-events:none;}
+.lb-badge{
+  position:absolute;width:26px;height:26px;
+  background:var(--accent);color:#fff;border-radius:50%;
+  border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);
+  font-size:13px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  transform:translate(-50%,-50%);
+  cursor:grab;pointer-events:all;user-select:none;z-index:8005;
+  transition:transform .12s;}
+.lb-badge:hover{transform:translate(-50%,-50%) scale(1.2);}
+.lb-badge.ann-drag{cursor:grabbing;opacity:.8;}
+.lb-badge:hover .ann-tip{opacity:1;}
+.lb-badge.no-tip .ann-tip{display:none;}
+#lb-close{
+  position:fixed;top:14px;right:18px;
+  width:36px;height:36px;
+  background:rgba(255,255,255,.14);color:#fff;
+  border:none;border-radius:50%;font-size:18px;
+  cursor:pointer;z-index:8010;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .14s;}
+#lb-close:hover{background:rgba(255,255,255,.28);}
+#lb-hint{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:rgba(255,255,255,.1);color:rgba(255,255,255,.78);
+  padding:6px 18px;border-radius:20px;font-size:12px;
+  pointer-events:none;z-index:8010;white-space:nowrap;}
+/* Annotation editor popup */
+#ann-popup{
+  position:fixed;display:none;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.18);
+  padding:10px;z-index:9000;min-width:210px;}
+#ann-popup.show{display:block;}
+#ann-popup .ap-label{font-size:11px;font-weight:600;color:var(--tx-sub);margin-bottom:5px;}
+#ann-popup textarea{
+  width:100%;box-sizing:border-box;
+  border:1px solid var(--border);border-radius:5px;
+  padding:6px 8px;font-size:12px;font-family:inherit;
+  resize:vertical;min-height:62px;outline:none;
+  background:var(--surface2);color:var(--tx);
+  transition:border-color .14s;}
+#ann-popup textarea:focus{border-color:var(--accent);background:var(--surface);}
+#ann-popup .ap-btns{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:5px;}
 </style>
 </head>
 <body>
@@ -1003,6 +1120,28 @@ textarea.fi{resize:vertical;min-height:80px;}
   </div>
 </div>
 
+<!-- LIGHTBOX -->
+<div id="lb-ov">
+  <button id="lb-close">✕</button>
+  <div id="lb-inner">
+    <img id="lb-img" src="" alt="">
+    <div id="lb-ann-layer"></div>
+  </div>
+  <div id="lb-hint">이미지 클릭 → 번호 추가 &nbsp;|&nbsp; 번호 드래그 → 이동 &nbsp;|&nbsp; 번호 클릭 → 설명 편집</div>
+</div>
+<!-- ANNOTATION POPUP -->
+<div id="ann-popup">
+  <div class="ap-label">번호 설명 편집</div>
+  <textarea id="ann-ta" placeholder="설명을 입력하세요 (마우스 호버 시 표시)&#10;Shift+Enter로 줄바꿈, Enter로 저장"></textarea>
+  <div class="ap-btns">
+    <button class="btn-s dng" id="ann-del">🗑️ 삭제</button>
+    <div style="display:flex;gap:5px;">
+      <button class="btn-s gh" id="ann-cancel">취소</button>
+      <button class="btn-s pri" id="ann-save">저장</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 /* ════ UTILS ════ */
@@ -1112,27 +1251,45 @@ function activeCats(){return activeSys()?.cats||[];}
 function activeCat(){return activeCats().find(c=>c.id===activeCatId)||null;}
 
 /* ════ BLOCK RENDERER ════ */
+const BLK_META={
+  table:    {icon:'📋',def:'표'},
+  timeline: {icon:'📌',def:'절차'},
+  checklist:{icon:'✅',def:'체크리스트'},
+  text:     {icon:'📝',def:'텍스트'},
+  notice:   {icon:'💬',def:'알림박스'}
+};
 function renderBlock(b){
+  const meta=BLK_META[b.type]||{icon:'📄',def:'내용'};
+  const ttl=esc(b.title||meta.def);
+  let inner='';
   switch(b.type){
-    case 'table':return renderTable(b);
-    case 'timeline':return renderTimeline(b);
-    case 'checklist':return renderChecklist(b);
-    case 'text':return `<div class="txt-block">${esc(b.content)}</div>`;
-    case 'notice':return renderNotice(b);
-    default:return '';
+    case 'table':    inner=renderTable(b);    break;
+    case 'timeline': inner=renderTimeline(b); break;
+    case 'checklist':inner=renderChecklist(b);break;
+    case 'text':     inner=`<div class="txt-block">${esc(b.content)}</div>`;break;
+    case 'notice':   inner=renderNotice(b);   break;
+    default: return '';
   }
+  return `<details class="blk-wrap" open>
+    <summary class="blk-hd">
+      <span class="blk-ico">${meta.icon}</span>
+      <span class="blk-ttl">${ttl}</span>
+      <span class="blk-arrow">▾</span>
+    </summary>
+    <div class="blk-body">${inner}</div>
+  </details>`;
 }
 function renderTable(b){
   const rows=b.rows.map(r=>`<tr><th>${esc(r.k)}</th><td>${esc(r.v)}</td></tr>`).join('');
-  return `${b.title?`<p class="sh">${esc(b.title)}</p>`:''}<table class="itbl">${rows}</table>`;
+  return `<table class="itbl">${rows}</table>`;
 }
 function renderTimeline(b){
   const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${esc(it.text)}</div>${it.sub?`<div class="tl-sb">${esc(it.sub)}</div>`:''}</div>`).join('');
-  return `${b.title?`<p class="sh">${esc(b.title)}</p>`:''}<div class="tl">${items}</div>`;
+  return `<div class="tl">${items}</div>`;
 }
 function renderChecklist(b){
   const items=b.items.map(it=>`<li><input type="checkbox" class="ck" ${it.checked?'checked':''}><label>${esc(it.label)}</label>${it.who?`<span class="who">${esc(it.who)}</span>`:''}</li>`).join('');
-  return `${b.title?`<p class="sh">${esc(b.title)}</p>`:''}<ul class="cl-list">${items}</ul>`;
+  return `<ul class="cl-list">${items}</ul>`;
 }
 function renderNotice(b){
   const cls=b.variant==='w'?'nt-w':b.variant==='ok'?'nt-ok':'nt-i';
@@ -1200,7 +1357,10 @@ function bakeImages(){
     if(ig&&ig.children.length){
       imgStore[step.id]=[...ig.children].map(el=>({
         src:el.querySelector('img')?.src||'',
-        caption:el.querySelector('.ii-cap')?.value||''
+        caption:el.querySelector('.ii-cap')?.value||'',
+        annotations:[...(el.querySelector('.ii-ann-layer')?.children||[])].map(b=>({
+          x:parseFloat(b.style.left),y:parseFloat(b.style.top),desc:b.dataset.desc||''
+        }))
       })).filter(x=>x.src);
     }
   })));
@@ -1258,7 +1418,7 @@ function renderMain(){
   SYSTEMS.forEach(sys=>sys.cats.forEach(cat=>{
     (imgStore[cat.steps?.[0]?.id]||null);// just iterate
     cat.steps&&cat.steps.forEach(step=>{
-      (imgStore[step.id]||[]).forEach(img=>addImgDOM(step.id,img.src,img.caption,true));
+      (imgStore[step.id]||[]).forEach(img=>addImgDOM(step.id,img.src,img.caption,true,img.annotations||[]));
     });
   }));
   attachFileInputs();
@@ -1294,31 +1454,206 @@ function readFile(f,sid){
     // imgStore update + push handled by addImgDOM override
   });
 }
-function addImgDOM(sid,src,caption,skipPush){
+function addImgDOM(sid,src,caption,skipPush,annotations){
   const grid=$('ig-'+sid),zone=$('iz-'+sid),ph=$('iph-'+sid);
   if(!grid||!zone) return;
   if(ph) ph.style.display='none';
   zone.classList.add('has');
   const item=document.createElement('div');item.className='ii';
+  // Image wrapper + annotation layer
+  const wrap=document.createElement('div');wrap.className='ii-wrap';
   const img=document.createElement('img');img.src=src;
-  const cap=document.createElement('input');cap.type='text';cap.className='ii-cap';cap.placeholder='캡션 입력 (선택)';cap.value=caption;
+  const annLayer=document.createElement('div');annLayer.className='ii-ann-layer';
+  wrap.append(img,annLayer);
+  // Zoom button
+  const zoomBtn=document.createElement('button');zoomBtn.className='ii-zoom-btn';zoomBtn.title='크게 보기';zoomBtn.textContent='🔍';
+  zoomBtn.addEventListener('click',ev=>{ev.stopPropagation();const idx=[...grid.children].indexOf(item);openLightbox(sid,idx);});
+  // Add annotation button
+  const annBtn=document.createElement('button');annBtn.className='ii-ann-add-btn';annBtn.title='번호 마커 추가';annBtn.textContent='＋번호';
+  annBtn.addEventListener('click',ev=>{ev.stopPropagation();addAnnBadge(sid,item);});
+  // Caption
+  const cap=document.createElement('input');cap.type='text';cap.className='ii-cap';cap.placeholder='캡션 입력 (선택)';cap.value=caption||'';
   cap.addEventListener('change',()=>syncImgStore(sid));
+  // Delete
   const del=document.createElement('button');del.className='ii-del';del.textContent='✕';
   del.addEventListener('click',ev=>{
     ev.stopPropagation();item.remove();
     if(!grid.children.length){if(ph)ph.style.display='';zone.classList.remove('has');}
     syncImgStore(sid);
   });
-  item.append(img,cap,del);grid.appendChild(item);
+  item.append(wrap,zoomBtn,annBtn,cap,del);
+  grid.appendChild(item);
+  buildAnnLayer(annLayer,annotations||[],sid,item);
   if(!skipPush){syncImgStore(sid);}
 }
 function syncImgStore(sid){
   const grid=$('ig-'+sid);if(!grid) return;
   imgStore[sid]=[...grid.children].map(el=>({
     src:el.querySelector('img')?.src||'',
-    caption:el.querySelector('.ii-cap')?.value||''
+    caption:el.querySelector('.ii-cap')?.value||'',
+    annotations:[...(el.querySelector('.ii-ann-layer')?.children||[])].map(b=>({
+      x:parseFloat(b.style.left),y:parseFloat(b.style.top),desc:b.dataset.desc||''
+    }))
   })).filter(x=>x.src);
   pushImages();
+}
+
+/* ════ ANNOTATION ENGINE ════ */
+function setBadgeDesc(b,desc){
+  b.dataset.desc=desc||'';
+  const tip=b.querySelector('.ann-tip');
+  if(desc){
+    b.classList.remove('no-tip');
+    if(tip){tip.textContent=desc;}
+    else{const t=document.createElement('div');t.className='ann-tip';t.textContent=desc;b.appendChild(t);}
+  }else{
+    b.classList.add('no-tip');
+    if(tip)tip.remove();
+  }
+}
+function renumLayer(layer){
+  [...layer.children].forEach((b,i)=>{
+    const sp=b.querySelector('span');if(sp)sp.textContent=String(i+1);
+  });
+}
+function makeDraggable(badge,container,onEnd){
+  let moved=false;
+  badge.addEventListener('mousedown',function(e){
+    if(e.button!==0)return;
+    e.preventDefault();e.stopPropagation();
+    moved=false;
+    const rect=container.getBoundingClientRect();
+    const sx=e.clientX,sy=e.clientY;
+    function onMove(me){
+      if(Math.abs(me.clientX-sx)>4||Math.abs(me.clientY-sy)>4){moved=true;badge.classList.add('ann-drag');}
+      if(!moved)return;
+      const x=Math.min(98,Math.max(2,(me.clientX-rect.left)/rect.width*100));
+      const y=Math.min(98,Math.max(2,(me.clientY-rect.top)/rect.height*100));
+      badge.style.left=x+'%';badge.style.top=y+'%';
+    }
+    function onUp(){
+      badge.classList.remove('ann-drag');
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+      if(moved)onEnd&&onEnd();
+    }
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+  return ()=>moved;
+}
+function mkAnnBadge(cls,x,y,num,desc){
+  const b=document.createElement('div');
+  b.className=cls+(desc?'':' no-tip');
+  b.style.cssText='left:'+x+'%;top:'+y+'%;';
+  b.dataset.desc=desc||'';
+  const sp=document.createElement('span');sp.textContent=String(num);
+  b.appendChild(sp);
+  if(desc){const t=document.createElement('div');t.className='ann-tip';t.textContent=desc;b.appendChild(t);}
+  return b;
+}
+var _annCb=null;
+function openAnnPopup(badge,onSave,onDelete){
+  closeAnnPopup();
+  const popup=$('ann-popup');
+  $('ann-ta').value=badge.dataset.desc||'';
+  _annCb={onSave,onDelete};
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const r=badge.getBoundingClientRect();
+  let top=r.bottom+8,left=r.left-10;
+  if(top+175>vh)top=r.top-180;
+  if(left+230>vw)left=vw-236;
+  if(left<4)left=4;
+  if(top<4)top=4;
+  popup.style.top=top+'px';popup.style.left=left+'px';
+  popup.classList.add('show');
+  setTimeout(()=>$('ann-ta').focus(),30);
+}
+function closeAnnPopup(){$('ann-popup').classList.remove('show');_annCb=null;}
+function buildAnnLayer(layer,annotations,sid,itemEl){
+  layer.innerHTML='';
+  (annotations||[]).forEach((ann,i)=>{
+    const b=mkAnnBadge('ann-badge',ann.x,ann.y,i+1,ann.desc);
+    const isDrag=makeDraggable(b,itemEl.querySelector('.ii-wrap'),()=>syncImgStore(sid));
+    b.addEventListener('click',function(e){
+      if(isDrag())return;
+      e.stopPropagation();
+      openAnnPopup(b,
+        desc=>{setBadgeDesc(b,desc);syncImgStore(sid);closeAnnPopup();},
+        ()=>{b.remove();renumLayer(layer);syncImgStore(sid);closeAnnPopup();}
+      );
+    });
+    layer.appendChild(b);
+  });
+}
+function addAnnBadge(sid,itemEl){
+  const layer=itemEl.querySelector('.ii-ann-layer');if(!layer)return;
+  const num=layer.children.length+1;
+  const b=mkAnnBadge('ann-badge',50,50,num,'');
+  const isDrag=makeDraggable(b,itemEl.querySelector('.ii-wrap'),()=>syncImgStore(sid));
+  b.addEventListener('click',function(e){
+    if(isDrag())return;
+    e.stopPropagation();
+    openAnnPopup(b,
+      desc=>{setBadgeDesc(b,desc);syncImgStore(sid);closeAnnPopup();},
+      ()=>{b.remove();renumLayer(layer);syncImgStore(sid);closeAnnPopup();}
+    );
+  });
+  layer.appendChild(b);
+  syncImgStore(sid);
+  setTimeout(()=>openAnnPopup(b,
+    desc=>{setBadgeDesc(b,desc);syncImgStore(sid);closeAnnPopup();},
+    ()=>{b.remove();renumLayer(layer);syncImgStore(sid);closeAnnPopup();}
+  ),60);
+}
+/* ════ LIGHTBOX ════ */
+var _lbState=null;
+function openLightbox(sid,imgIdx){
+  _lbState={sid,imgIdx};
+  const entry=(imgStore[sid]||[])[imgIdx];if(!entry)return;
+  $('lb-img').src=entry.src;
+  buildLbLayer(entry.annotations||[]);
+  $('lb-ov').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function buildLbLayer(annotations){
+  const layer=$('lb-ann-layer');layer.innerHTML='';
+  (annotations||[]).forEach((ann,i)=>_addLbBadgeEl(ann.x,ann.y,ann.desc,i+1));
+}
+function _addLbBadgeEl(x,y,desc,num){
+  const layer=$('lb-ann-layer'),container=$('lb-inner');
+  const b=mkAnnBadge('lb-badge',x,y,num||(layer.children.length+1),desc);
+  const isDrag=makeDraggable(b,container,()=>flushLbToSource());
+  b.addEventListener('click',function(e){
+    if(isDrag())return;
+    e.stopPropagation();
+    openAnnPopup(b,
+      desc=>{setBadgeDesc(b,desc);flushLbToSource();closeAnnPopup();},
+      ()=>{b.remove();renumLayer(layer);flushLbToSource();closeAnnPopup();}
+    );
+  });
+  layer.appendChild(b);return b;
+}
+function flushLbToSource(){
+  if(!_lbState)return;
+  const {sid,imgIdx}=_lbState;
+  const anns=[...$('lb-ann-layer').children].map(b=>({
+    x:parseFloat(b.style.left),y:parseFloat(b.style.top),desc:b.dataset.desc||''
+  }));
+  if(!imgStore[sid])imgStore[sid]=[];
+  if(imgStore[sid][imgIdx])imgStore[sid][imgIdx].annotations=anns;
+  const grid=$('ig-'+sid);
+  const itemEl=grid&&grid.children[imgIdx];
+  const miniLayer=itemEl&&itemEl.querySelector('.ii-ann-layer');
+  if(miniLayer)buildAnnLayer(miniLayer,anns,sid,itemEl);
+  pushImages();
+}
+function closeLightbox(){
+  flushLbToSource();
+  $('lb-ov').classList.remove('show');
+  document.body.style.overflow='';
+  closeAnnPopup();
+  _lbState=null;
 }
 
 /* ════ PROGRESS ════ */
@@ -1437,6 +1772,36 @@ $('btn-add-cat').addEventListener('click',openAddCat);
 $('btn-print').addEventListener('click',()=>window.print());
 $('btn-save').addEventListener('click',saveGuide);
 $('btn-import').addEventListener('click', function(){ if(window.importFromOldFile) window.importFromOldFile(); });
+/* ── Annotation popup ── */
+$('ann-save').addEventListener('click',function(){if(_annCb)_annCb.onSave($('ann-ta').value.trim());});
+$('ann-cancel').addEventListener('click',closeAnnPopup);
+$('ann-del').addEventListener('click',function(){if(_annCb)_annCb.onDelete();});
+$('ann-ta').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(_annCb)_annCb.onSave($('ann-ta').value.trim());}});
+document.addEventListener('click',function(e){
+  if($('ann-popup').classList.contains('show')&&!$('ann-popup').contains(e.target))closeAnnPopup();
+},true);
+/* ── Lightbox ── */
+$('lb-close').addEventListener('click',closeLightbox);
+$('lb-ov').addEventListener('click',function(e){if(e.target===$('lb-ov'))closeLightbox();});
+$('lb-inner').addEventListener('click',function(e){
+  if(e.target===$('lb-inner')||e.target===$('lb-img')||e.target===$('lb-ann-layer')){
+    const rect=$('lb-inner').getBoundingClientRect();
+    const x=(e.clientX-rect.left)/rect.width*100;
+    const y=(e.clientY-rect.top)/rect.height*100;
+    const b=_addLbBadgeEl(x,y,'',null);
+    flushLbToSource();
+    setTimeout(()=>openAnnPopup(b,
+      desc=>{setBadgeDesc(b,desc);flushLbToSource();closeAnnPopup();},
+      ()=>{b.remove();renumLayer($('lb-ann-layer'));flushLbToSource();closeAnnPopup();}
+    ),30);
+  }
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    if($('lb-ov').classList.contains('show')){closeLightbox();return;}
+    if($('ann-popup').classList.contains('show')){closeAnnPopup();}
+  }
+});
 document.addEventListener('click',e=>{
   const cl=e.target.closest('[data-close]');if(cl) closeM(cl.dataset.close);
   if(e.target.classList.contains('mov')) e.target.classList.remove('show');
@@ -1982,9 +2347,14 @@ window.syncImgStore = function(sid) {
   if (!grid) return;
   if (!window.imgStore) window.imgStore = {};
   window.imgStore[sid] = [].slice.call(grid.children).map(function(el) {
+    var annLayer = el.querySelector('.ii-ann-layer');
+    var annotations = annLayer ? [].slice.call(annLayer.children).map(function(b) {
+      return { x: parseFloat(b.style.left), y: parseFloat(b.style.top), desc: b.dataset.desc || '' };
+    }) : [];
     return {
-      src:     (el.querySelector('img') || {}).src || '',
-      caption: (el.querySelector('.ii-cap') || {}).value || ''
+      src:         (el.querySelector('img') || {}).src || '',
+      caption:     (el.querySelector('.ii-cap') || {}).value || '',
+      annotations: annotations
     };
   }).filter(function(x) { return x.src; });
   window.pushImages();
@@ -2102,7 +2472,7 @@ function startListening() {
       if (ph) ph.style.display = 'none';
       if (zone) zone.classList.add('has');
       toArr(imgs[sid]).forEach(function(img) {
-        if (typeof addImgDOM === 'function') addImgDOM(sid, img.src, img.caption, true);
+        if (typeof addImgDOM === 'function') addImgDOM(sid, img.src, img.caption, true, img.annotations || []);
       });
     });
   });
