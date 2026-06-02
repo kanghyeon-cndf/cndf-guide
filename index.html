@@ -349,8 +349,8 @@ textarea.fi{resize:vertical;min-height:80px;}
   .blk-wrap{border:none;}.blk-hd{display:none;}.blk-wrap:not([open]) .blk-body{display:block!important;}}
 /* ── IMAGE ANNOTATION & LIGHTBOX ── */
 .ii{overflow:visible;}
-.ii-wrap{position:relative;line-height:0;display:block;overflow:hidden;border-radius:7px 7px 0 0;}
-.ii-wrap img{width:100%;display:block;}
+.ii-wrap{position:relative;line-height:0;display:block;overflow:visible;border-radius:7px 7px 0 0;}
+.ii-wrap img{width:100%;display:block;border-radius:7px 7px 0 0;}
 .ii-ann-layer{position:absolute;inset:0;pointer-events:none;}
 .ann-badge{
   position:absolute;width:22px;height:22px;
@@ -369,7 +369,7 @@ textarea.fi{resize:vertical;min-height:80px;}
   background:rgba(18,28,48,.93);color:#fff;
   border-radius:7px;padding:7px 11px;
   font-size:11px;font-weight:400;white-space:pre-wrap;
-  max-width:220px;min-width:80px;text-align:center;line-height:1.5;
+  max-width:440px;min-width:160px;text-align:center;line-height:1.5;
   pointer-events:none;opacity:0;transition:opacity .15s;
   z-index:100;box-shadow:0 4px 14px rgba(0,0,0,.3);}
 .ann-tip::after{
@@ -1578,14 +1578,18 @@ function setupTooltipDir(badge,container){
     const topPx =parseFloat(badge.style.top) /100*cRect.height;
     const leftPx=parseFloat(badge.style.left)/100*cRect.width;
     const tipH=tip.offsetHeight||72;
-    const tipW=220;
+    const tipW=Math.min(440,cRect.width-16);
+    const badgeHalf=11;
     // 수직: 위 공간 부족 시 아래로 반전
-    badge.classList.toggle('tip-below',topPx<tipH+20);
-    // 수평: 좌우 끝에서 툴팁이 잘리지 않도록 nudge
+    badge.classList.toggle('tip-below',topPx-badgeHalf<tipH+8);
+    // 수평: 양쪽 경계를 넘지 않도록 클램프
     const half=tipW/2;
+    const pad=8;
+    let desiredLeft=leftPx-half;
+    let desiredRight=leftPx+half;
     let shift=0;
-    if(leftPx<half+8)            shift= half-leftPx+8;
-    else if(cRect.width-leftPx<half+8) shift=-(half-(cRect.width-leftPx)+8);
+    if(desiredLeft<pad)      shift=pad-desiredLeft;
+    if(desiredRight+shift>cRect.width-pad) shift=(cRect.width-pad)-desiredRight;
     tip.style.transform=`translateX(calc(-50% + ${shift}px))`;
   });
   badge.addEventListener('mouseleave',function(){
