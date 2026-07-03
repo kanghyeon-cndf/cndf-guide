@@ -1168,6 +1168,19 @@ textarea.fi{resize:vertical;min-height:80px;}
 /* ════ UTILS ════ */
 var _uid=3000;
 const uid=()=>'x'+(++_uid);
+/* 로드된 데이터의 모든 id를 훑어 _uid 카운터를 최대값 이상으로 올려 id 충돌(중복) 방지.
+   Firebase 데이터에는 _uid가 저장되지 않으므로, 로드 직후 반드시 호출해야 새로 생성되는
+   id가 기존 id와 겹치지 않는다. (겹치면 find()가 첫 항목을 반환해 엉뚱한 행이 수정됨) */
+function syncUid(data){
+  var max=_uid;
+  (function walk(o){
+    if(!o||typeof o!=='object') return;
+    if(Array.isArray(o)){for(var i=0;i<o.length;i++) walk(o[i]);return;}
+    if(typeof o.id==='string'){var m=/^x(\d+)$/.exec(o.id);if(m){var n=+m[1];if(n>max)max=n;}}
+    for(var k in o){if(k==='src')continue;walk(o[k]);}
+  })(data);
+  _uid=max;
+}
 const $=id=>document.getElementById(id);
 const esc=s=>s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const openM=id=>$(id).classList.add('show');
@@ -1188,6 +1201,7 @@ function initData(){
       if(sv._uid) _uid=sv._uid;
       if(sv.systems) SYSTEMS=sv.systems;
       if(sv.imgStore) imgStore=sv.imgStore;
+      syncUid(SYSTEMS);
       activeSysId=SYSTEMS[0]?.id||'';
       activeCatId=SYSTEMS[0]?.cats[0]?.id||'';
       return;
@@ -2613,6 +2627,7 @@ window.importFromOldFile = function() {
         if (!sv.systems && !sv.cats) { alert('데이터 형식 오류'); return; }
         if (sv.cats && !sv.systems) sv.systems = [{ id: 'x1', label: 'OAS', cats: sv.cats }];
         window.SYSTEMS = normSystems(sv.systems);
+        syncUid(window.SYSTEMS);
         window.imgStore = sv.imgStore || {};
         window.activeSysId = (window.SYSTEMS[0] || {}).id || '';
         window.activeCatId = (((window.SYSTEMS[0] || {}).cats || [])[0] || {}).id || '';
@@ -2654,6 +2669,7 @@ function startListening() {
 
     var prev = window.SYSTEMS;
     window.SYSTEMS = normalized;
+    syncUid(normalized);
     if (_typing) return;
 
     /* 체크박스만 바뀐 경우: DOM 직접 패치 (re-render 없음) */
@@ -2770,6 +2786,9 @@ function fbInit() {
       if (!window.imgStore) window.imgStore = {};
       Object.assign(window.imgStore, imgData);
     }
+
+    /* id 카운터 동기화 (Firebase 데이터엔 _uid가 없으므로 로드 후 반드시 보정) */
+    syncUid(window.SYSTEMS);
 
     /* activeSysId 보정 */
     if (window.SYSTEMS && window.SYSTEMS.length) {
