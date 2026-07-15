@@ -37,6 +37,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
   background:rgba(255,255,255,.1);color:#fff;font-size:12px;font-weight:600;
   cursor:pointer;font-family:inherit;transition:background .15s;}
 .h-btn:hover{background:rgba(255,255,255,.22);}
+.h-btn:disabled{opacity:.4;cursor:default;}
+.h-btn:disabled:hover{background:rgba(255,255,255,.1);}
 /* System tabs row */
 .hdr-tabs{height:38px;display:flex;align-items:center;
   padding:0 20px;gap:3px;overflow-x:auto;scrollbar-width:none;}
@@ -182,6 +184,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .sh::before{content:'';display:block;width:3px;height:13px;
   background:var(--accent);border-radius:2px;}
 .txt-block{font-size:13px;color:var(--tx);line-height:1.8;padding:4px 0;white-space:pre-wrap;}
+.ilink{color:var(--accent);text-decoration:underline;word-break:break-all;}
+.ilink:hover{text-decoration:none;}
 code{font-family:'JetBrains Mono',monospace;background:var(--surface2);
   border:1px solid var(--border);padding:1px 5px;border-radius:4px;
   font-size:12px;color:var(--primary);}
@@ -481,6 +485,8 @@ textarea.fi{resize:vertical;min-height:80px;}
     <div class="h-right">
       <div class="users-badge"><span>👥</span><span class="ub-text">접속 중 0명</span></div>
       <div class="sync-badge synced" id="sync-badge"><span class="sb-dot"></span><span class="sb-text">동기화됨</span></div>
+      <button class="h-btn" id="btn-undo" title="되돌리기 (최근 3회까지)" disabled>↩️ 되돌리기</button>
+      <button class="h-btn" id="btn-recover" title="OAS 슬롯조정 마지막 작업에 잘못 들어간 이미지를 BMW로 이동" style="display:none;background:#f59e0b;border-color:#f59e0b;">🔧 BMW 이미지 복구</button>
       <button class="h-btn" id="btn-import" title="기존 HTML 파일에서 데이터 가져오기">📥 파일 가져오기</button>
       <button class="h-btn" id="btn-print">🖨️ 인쇄</button>
       <button class="h-btn" id="btn-save">💾 HTML 저장</button>
@@ -1181,8 +1187,123 @@ function syncUid(data){
   })(data);
   _uid=max;
 }
+/* 이미 저장된 데이터 안에 중복 id가 있으면(과거 _uid 미저장 버그로 생성됨) 새 고유 id로 재발급.
+   첫 번째로 등장하는 항목은 원래 id를 유지(이미지가 step id로 연결되어 있어 링크 보존),
+   이후 중복 항목만 uid()로 새 id를 받는다. 반드시 syncUid() 이후에 호출해야 안전한 새 id가 나온다.
+   변경이 있었으면 true를 반환하여 호출부에서 Firebase에 정리된 데이터를 저장하도록 한다. */
+function dedupeIds(systems){
+  if(!Array.isArray(systems)) return false;
+  var seen={}, changed=false;
+  function fix(o){
+    if(o && typeof o.id==='string'){
+      if(seen[o.id]){ o.id=uid(); changed=true; }
+      seen[o.id]=true;
+    }
+  }
+  systems.forEach(function(sys){
+    fix(sys);
+    (sys.cats||[]).forEach(function(cat){
+      fix(cat);
+      (cat.steps||[]).forEach(function(step){
+        fix(step);
+        (step.blocks||[]).forEach(function(bl){
+          fix(bl);
+          (bl.rows||[]).forEach(fix);
+          (bl.items||[]).forEach(fix);
+        });
+      });
+    });
+  });
+  return changed;
+}
+
+/* ════ 되돌리기(UNDO) - 최근 3회 ════
+   captureUndo(): 로컬 변경이 저장될 때(scheduleWrite) 변경 직전 상태를 스택에 push (최대 3개).
+   resetUndoBaseline(): 최초 로드/원격 변경 시 기준만 갱신(기록 안 함).
+   doUndo(): 스택에서 직전 상태를 꺼내 복원 후 Firebase에 반영. */
+var _undoStack=[], _undoBaseline=null, _undoing=false;
+function _cloneSys(){ try{ return JSON.parse(JSON.stringify(window.SYSTEMS||[])); }catch(e){ return null; } }
+function resetUndoBaseline(clearStack){ if(clearStack) _undoStack=[]; _undoBaseline=_cloneSys(); updateUndoBtn(); }
+function captureUndo(){
+  if(_undoing) return;
+  if(_undoBaseline){ _undoStack.push(_undoBaseline); if(_undoStack.length>3) _undoStack.shift(); }
+  _undoBaseline=_cloneSys();
+  updateUndoBtn();
+}
+function updateUndoBtn(){ var b=document.getElementById('btn-undo'); if(b) b.disabled=(_undoStack.length===0); }
+function doUndo(){
+  if(!_undoStack.length) return;
+  var prev=_undoStack.pop();
+  _undoing=true;
+  window.SYSTEMS=prev;
+  _undoBaseline=_cloneSys();
+  /* active 참조 보정 (복원된 데이터에 없는 id면 첫 항목으로) */
+  var s=(window.SYSTEMS||[]).filter(function(x){return x.id===activeSysId;})[0]||(window.SYSTEMS||[])[0]||null;
+  activeSysId=s?s.id:'';
+  var c=(s&&(s.cats||[]).filter(function(x){return x.id===activeCatId;})[0])||(s&&(s.cats||[])[0])||null;
+  activeCatId=c?c.id:'';
+  render();
+  if(typeof scheduleWrite==='function') scheduleWrite();  /* 되돌린 상태를 Firebase에 반영 */
+  _undoing=false;
+  updateUndoBtn();
+}
+
+/* ════ BMW 이미지 복구 (1회성) ════
+   id 충돌 버그로 BMW step의 이미지가 OAS '슬롯 조정' 마지막 작업 참고스크린샷으로 들어감.
+   imgStore는 step id로만 키되어(시스템/카테고리 무관), 삭제된 BMW step과 OAS step이 같은 id라
+   이미지가 남아 OAS쪽에 표시됨. 이 이미지를 BMW-통합업무 > 'BMW PC Wifi 설정 방법' 새 작업으로 이동. */
+function _slotLastStep(){
+  var oas=(window.SYSTEMS||[]).filter(function(s){return (s.label||'')==='OAS';})[0];
+  var slot=oas&&(oas.cats||[]).filter(function(c){return (c.label||'').indexOf('슬롯')>=0;})[0];
+  var steps=slot?(slot.steps||[]):[];
+  return steps.length?steps[steps.length-1]:null;
+}
+function _orphanImgs(){
+  var st=_slotLastStep();
+  var arr=st&&(window.imgStore||{})[st.id];
+  return (arr&&arr.length)?arr:null;
+}
+function updateRecoverBtn(){
+  var b=document.getElementById('btn-recover');
+  if(b) b.style.display=_orphanImgs()?'':'none';
+}
+function recoverBmwImages(){
+  var src=_slotLastStep(), imgs=_orphanImgs();
+  if(!src||!imgs){ alert('복구할 이미지가 없습니다.'); updateRecoverBtn(); return; }
+  if(!confirm('OAS \'슬롯 조정\' 마지막 작업의 참고 스크린샷 '+imgs.length+'장을\nBMW-통합업무 > \'BMW PC Wifi 설정 방법\' 새 작업으로 이동합니다.\n계속하시겠습니까?')) return;
+  var SYS=window.SYSTEMS||[];
+  var bmw=SYS.filter(function(s){return (s.label||'').indexOf('BMW')>=0;})[0];
+  if(!bmw){ bmw={id:uid(),label:'BMW-통합업무',cats:[]}; SYS.push(bmw); }
+  if(!bmw.cats) bmw.cats=[];
+  var cat=bmw.cats.filter(function(c){return (c.label||'').indexOf('Wifi')>=0||(c.label||'').indexOf('wifi')>=0;})[0];
+  if(!cat){ cat={id:uid(),icon:'🌐',label:'BMW PC Wifi 설정 방법',desc:'',steps:[]}; bmw.cats.push(cat); }
+  if(!cat.steps) cat.steps=[];
+  var step={id:uid(),label:'PC Wifi 설정 스크린샷',tag:'t-req',tl:'필수',blocks:[]};
+  cat.steps.push(step);
+  if(!window.imgStore) window.imgStore={};
+  window.imgStore[step.id]=imgs;   /* 이미지 이동 */
+  delete window.imgStore[src.id];  /* OAS쪽에서 제거 */
+  activeSysId=bmw.id; activeCatId=cat.id;
+  render();
+  if(typeof scheduleWrite==='function') scheduleWrite();
+  if(window.pushImages) window.pushImages();
+  updateRecoverBtn();
+  alert('✅ 이미지 '+imgs.length+'장을 BMW-통합업무 > BMW PC Wifi 설정 방법으로 옮겼습니다.');
+}
 const $=id=>document.getElementById(id);
 const esc=s=>s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// HTML 이스케이프 후 URL(http/https, www.)을 하이퍼링크로 변환
+const escLink=s=>{
+  const e=esc(s);
+  return e.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g,m=>{
+    // 문장부호가 URL 끝에 붙은 경우 링크에서 제외
+    let url=m, tail='';
+    const tm=url.match(/([.,;:!?)\]}'"]+)$/);
+    if(tm){tail=tm[1];url=url.slice(0,-tail.length);}
+    const href=/^https?:\/\//.test(url)?url:'http://'+url;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="ilink">${url}</a>${tail}`;
+  });
+};
 const openM=id=>$(id).classList.add('show');
 const closeM=id=>$(id).classList.remove('show');
 
@@ -1202,6 +1323,7 @@ function initData(){
       if(sv.systems) SYSTEMS=sv.systems;
       if(sv.imgStore) imgStore=sv.imgStore;
       syncUid(SYSTEMS);
+      dedupeIds(SYSTEMS);
       activeSysId=SYSTEMS[0]?.id||'';
       activeCatId=SYSTEMS[0]?.cats[0]?.id||'';
       return;
@@ -1301,7 +1423,7 @@ function renderBlock(b){
     case 'table':    inner=renderTable(b);    break;
     case 'timeline': inner=renderTimeline(b); break;
     case 'checklist':inner=renderChecklist(b);break;
-    case 'text':     inner=`<div class="txt-block">${esc(b.content)}</div>`;break;
+    case 'text':     inner=`<div class="txt-block">${escLink(b.content)}</div>`;break;
     case 'notice':   inner=renderNotice(b);   break;
     default: return '';
   }
@@ -1315,21 +1437,21 @@ function renderBlock(b){
   </details>`;
 }
 function renderTable(b){
-  const rows=b.rows.map(r=>`<tr><th>${esc(r.k)}</th><td>${esc(r.v)}</td></tr>`).join('');
+  const rows=b.rows.map(r=>`<tr><th>${esc(r.k)}</th><td>${escLink(r.v)}</td></tr>`).join('');
   return `<table class="itbl">${rows}</table>`;
 }
 function renderTimeline(b){
-  const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${esc(it.text)}</div>${it.sub?`<div class="tl-sb">${esc(it.sub)}</div>`:''}</div>`).join('');
+  const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${escLink(it.text)}</div>${it.sub?`<div class="tl-sb">${escLink(it.sub)}</div>`:''}</div>`).join('');
   return `<div class="tl">${items}</div>`;
 }
 function renderChecklist(b){
-  const items=b.items.map(it=>`<li><input type="checkbox" class="ck" ${it.checked?'checked':''}><label>${esc(it.label)}</label>${it.who?`<span class="who">${esc(it.who)}</span>`:''}</li>`).join('');
+  const items=b.items.map(it=>`<li><input type="checkbox" class="ck" ${it.checked?'checked':''}><label>${escLink(it.label)}</label>${it.who?`<span class="who">${esc(it.who)}</span>`:''}</li>`).join('');
   return `<ul class="cl-list">${items}</ul>`;
 }
 function renderNotice(b){
   const cls=b.variant==='w'?'nt-w':b.variant==='ok'?'nt-ok':'nt-i';
   const icon=b.variant==='w'?'⚠️':b.variant==='ok'?'✅':'ℹ️';
-  return `<div class="nt ${cls}"><span class="ni">${icon}</span><span>${esc(b.text)}</span></div>`;
+  return `<div class="nt ${cls}"><span class="ni">${icon}</span><span>${escLink(b.text)}</span></div>`;
 }
 
 /* ════ SYSTEM TABS RENDER ════ */
@@ -1467,6 +1589,7 @@ function render(keepScroll){
   renderSidebar();
   renderMain();
   if(keepScroll) window.scrollTo(0,sy);
+  if(typeof updateRecoverBtn==='function') updateRecoverBtn();
 }
 
 /* ════ IMAGES ════ */
@@ -1952,6 +2075,8 @@ $('btn-add-cat').addEventListener('click',openAddCat);
 $('btn-print').addEventListener('click',()=>window.print());
 $('btn-save').addEventListener('click',saveGuide);
 $('btn-import').addEventListener('click', function(){ if(window.importFromOldFile) window.importFromOldFile(); });
+$('btn-undo').addEventListener('click', doUndo);
+$('btn-recover').addEventListener('click', recoverBmwImages);
 /* ── Annotation popup ── */
 $('ann-save').addEventListener('click',function(){if(_annCb)_annCb.onSave($('ann-ta').value.trim());});
 $('ann-cancel').addEventListener('click',closeAnnPopup);
@@ -2140,16 +2265,19 @@ $('as-save').addEventListener('click',()=>{
   const tagEl=document.querySelector('#as-tags .tt.sel');
   const tag=tagEl?.dataset.tag||'t-req',tl=tagEl?.dataset.tl||'필수';
   const blocks=_selTpls.length?_selTpls.map(t=>mkBlock(t.type)):[mkBlock('text')];
-  cat.steps.push({id:uid(),label:name,tag,tl,blocks});
+  const newId=uid(),catId=_addStepCatId;
+  cat.steps.push({id:newId,label:name,tag,tl,blocks});
   closeM('m-add-step');scheduleWrite();render();
+  // 방금 추가한 작업의 편집 모달을 바로 열어 내용을 입력할 수 있게 함
+  setTimeout(()=>openEditStep(catId,newId),60);
 });
 function mkBlock(type){
   switch(type){
     case 'table':return {id:uid(),type:'table',title:'정보',rows:[{id:uid(),k:'',v:''}]};
     case 'timeline':return {id:uid(),type:'timeline',title:'절차',items:[{id:uid(),title:'',text:'',sub:''}]};
     case 'checklist':return {id:uid(),type:'checklist',title:'확인 항목',items:[{id:uid(),label:'',who:'',checked:false}]};
-    case 'text':return {id:uid(),type:'text',content:'내용을 입력하세요.'};
-    case 'notice':return {id:uid(),type:'notice',variant:'i',text:'알림 내용을 입력하세요.'};
+    case 'text':return {id:uid(),type:'text',content:''};
+    case 'notice':return {id:uid(),type:'notice',variant:'i',text:''};
     default:return {id:uid(),type:'text',content:''};
   }
 }
@@ -2216,14 +2344,14 @@ function buildBEBody(b,idx){
       <input class="ri" style="width:100%;margin-bottom:7px;" value="${esc(b.title||'')}" placeholder="제목 (선택)" data-btitle="${idx}">
       <div id="cl-${idx}">${b.items.map((it,ci)=>`<div class="row-ed"><input class="ri" style="flex:2;" value="${esc(it.label)}" placeholder="항목 내용" data-cla="1" data-bi="${idx}" data-ci="${ci}"><input class="ri" style="flex:1;" value="${esc(it.who)}" placeholder="담당자" data-cwh="1" data-bi="${idx}" data-ci="${ci}"><button class="rd-btn" data-delcl="${ci}" data-bi="${idx}">✕</button></div>`).join('')}</div>
       <button class="add-row-btn" data-addcl="${idx}">＋ 항목 추가</button>`;
-    case 'text':return `<textarea class="fi" rows="4" data-txtc="${idx}">${esc(b.content)}</textarea>`;
+    case 'text':return `<textarea class="fi" rows="4" placeholder="내용을 입력하세요. (URL 입력 시 자동으로 링크 처리됩니다)" data-txtc="${idx}">${esc(b.content)}</textarea>`;
     case 'notice':return `
       <div class="vtabs" id="vt-${idx}">
         <div class="vt vt-w ${b.variant==='w'?'sel':''}" data-vv="w" data-bi="${idx}">⚠️ 경고</div>
         <div class="vt vt-i ${b.variant==='i'?'sel':''}" data-vv="i" data-bi="${idx}">ℹ️ 안내</div>
         <div class="vt vt-ok ${b.variant==='ok'?'sel':''}" data-vv="ok" data-bi="${idx}">✅ 완료</div>
       </div>
-      <textarea class="fi" rows="3" data-ntxt="${idx}">${esc(b.text)}</textarea>`;
+      <textarea class="fi" rows="3" placeholder="알림 내용을 입력하세요. (URL 입력 시 자동으로 링크 처리됩니다)" data-ntxt="${idx}">${esc(b.text)}</textarea>`;
     default:return '';
   }
 }
@@ -2324,6 +2452,7 @@ function saveGuide(){
 /* ════ INIT ════ */
 initData();
 render();
+resetUndoBaseline(true);  /* 되돌리기 기준 초기화 */
 
 
 </script>
@@ -2549,6 +2678,7 @@ window.scheduleWrite = function() {
   if (!_ready) return;
   var sys = window.SYSTEMS;
   if (!sys || !Array.isArray(sys) || sys.length === 0) return;
+  captureUndo();  /* 변경 직전 상태를 되돌리기 스택에 기록 */
   clearTimeout(_writeTimer);
   badge('pending', '저장 중...');
   _writeTimer = setTimeout(function() {
@@ -2628,6 +2758,8 @@ window.importFromOldFile = function() {
         if (sv.cats && !sv.systems) sv.systems = [{ id: 'x1', label: 'OAS', cats: sv.cats }];
         window.SYSTEMS = normSystems(sv.systems);
         syncUid(window.SYSTEMS);
+        dedupeIds(window.SYSTEMS);
+        resetUndoBaseline(true);
         window.imgStore = sv.imgStore || {};
         window.activeSysId = (window.SYSTEMS[0] || {}).id || '';
         window.activeCatId = (((window.SYSTEMS[0] || {}).cats || [])[0] || {}).id || '';
@@ -2670,6 +2802,8 @@ function startListening() {
     var prev = window.SYSTEMS;
     window.SYSTEMS = normalized;
     syncUid(normalized);
+    if (dedupeIds(normalized)) window.scheduleWrite();  /* 중복 id가 있으면 정리 후 저장 */
+    resetUndoBaseline(true);  /* 원격 변경 → 되돌리기 기준 갱신 및 스택 초기화 */
     if (_typing) return;
 
     /* 체크박스만 바뀐 경우: DOM 직접 패치 (re-render 없음) */
@@ -2689,6 +2823,7 @@ function startListening() {
     if (typeof renderSysTabs === 'function') renderSysTabs();
     if (typeof renderSidebar === 'function') renderSidebar();
     if (typeof renderMain    === 'function') renderMain();
+    if (typeof updateRecoverBtn === 'function') updateRecoverBtn();
     window.scrollTo(0, sy);
     badge('synced', '동기화됨');
   }, function(err) {
@@ -2718,6 +2853,7 @@ function startListening() {
         if (typeof addImgDOM === 'function') addImgDOM(sid, img.src, img.caption, true, img.annotations || []);
       });
     });
+    if (typeof updateRecoverBtn === 'function') updateRecoverBtn();
   });
 
   /* 접속자 수 */
@@ -2800,11 +2936,21 @@ function fbInit() {
     }
 
     _ready = true;
+
+    /* 기존 데이터에 이미 저장된 중복 id 정리 → 정리됐으면 Firebase에 반영 */
+    if (dedupeIds(window.SYSTEMS)) {
+      _suppress = true;
+      SYS_REF.set(window.SYSTEMS);
+    }
+
     badge('synced', '동기화됨');
     startListening();
 
     /* 화면 갱신 */
     if (typeof render === 'function') render();
+
+    /* 되돌리기 기준 초기화 (로드 직후 상태 기준) */
+    resetUndoBaseline(true);
 
   }).catch(function(err) {
     console.error('[Firebase] 연결 실패:', err.code, err.message);
