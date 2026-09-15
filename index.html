@@ -152,7 +152,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .itbl th{text-align:left;padding:7px 11px;background:var(--surface2);
   font-size:12px;font-weight:600;color:var(--tx-sub);
   border-bottom:1px solid var(--border);width:150px;}
-.itbl td{padding:7px 11px;font-size:13px;border-bottom:1px solid var(--border);}
+.itbl td{padding:7px 11px;font-size:13px;border-bottom:1px solid var(--border);
+  white-space:pre-wrap;word-break:break-word;}
 .itbl tr:last-child th,.itbl tr:last-child td{border-bottom:none;}
 .cl-list{list-style:none;}
 .cl-list li{display:flex;align-items:flex-start;gap:9px;padding:7px 0;
@@ -160,7 +161,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .cl-list li:last-child{border-bottom:none;}
 .cl-list li input[type=checkbox]{margin-top:3px;flex-shrink:0;
   width:14px;height:14px;cursor:pointer;accent-color:var(--accent);}
-.cl-list li label{cursor:pointer;flex:1;}
+.cl-list li label{cursor:pointer;flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;}
 .who{font-size:11px;padding:2px 8px;border-radius:20px;
   background:var(--surface2);color:var(--tx-m);white-space:nowrap;align-self:flex-start;}
 .nt{display:flex;gap:9px;align-items:flex-start;
@@ -169,6 +170,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .nt-i{background:var(--accent-soft);border-left:3px solid var(--accent);color:#1a5094;}
 .nt-ok{background:var(--success-soft);border-left:3px solid var(--success);color:var(--success);}
 .ni{font-size:14px;flex-shrink:0;margin-top:1px;}
+.nt>span:not(.ni){flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;}
 .tl{position:relative;padding-left:20px;margin:8px 0;}
 .tl::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--border);}
 .tl-i{position:relative;padding:0 0 12px 16px;}
@@ -177,13 +179,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
   border-radius:50%;background:var(--accent);border:2px solid #fff;
   box-shadow:0 0 0 2px var(--accent);}
 .tl-dt{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px;}
-.tl-tx{font-size:13px;}
-.tl-sb{font-size:12px;color:var(--tx-m);margin-top:2px;}
+.tl-tx{font-size:13px;white-space:pre-wrap;word-break:break-word;}
+.tl-sb{font-size:12px;color:var(--tx-m);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
 .sh{font-size:13px;font-weight:700;color:var(--primary);margin:13px 0 7px;
   display:flex;align-items:center;gap:6px;}
 .sh::before{content:'';display:block;width:3px;height:13px;
   background:var(--accent);border-radius:2px;}
-.txt-block{font-size:13px;color:var(--tx);line-height:1.8;padding:4px 0;white-space:pre-wrap;}
+.txt-block{font-size:13px;color:var(--tx);line-height:1.8;padding:4px 0;white-space:pre-wrap;word-break:break-word;}
 .ilink{color:var(--accent);text-decoration:underline;word-break:break-all;}
 .ilink:hover{text-decoration:none;}
 code{font-family:'JetBrains Mono',monospace;background:var(--surface2);
@@ -1304,6 +1306,8 @@ const escLink=s=>{
     return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="ilink">${url}</a>${tail}`;
   });
 };
+// 줄바꿈까지 보존해 표출 (입력한 개행 = 표출 개행)
+const escML=s=>escLink(s).replace(/\r\n|\r|\n/g,'<br>');
 const openM=id=>$(id).classList.add('show');
 const closeM=id=>$(id).classList.remove('show');
 
@@ -1423,7 +1427,7 @@ function renderBlock(b){
     case 'table':    inner=renderTable(b);    break;
     case 'timeline': inner=renderTimeline(b); break;
     case 'checklist':inner=renderChecklist(b);break;
-    case 'text':     inner=`<div class="txt-block">${escLink(b.content)}</div>`;break;
+    case 'text':     inner=`<div class="txt-block">${escML(b.content)}</div>`;break;
     case 'notice':   inner=renderNotice(b);   break;
     default: return '';
   }
@@ -1437,21 +1441,21 @@ function renderBlock(b){
   </details>`;
 }
 function renderTable(b){
-  const rows=b.rows.map(r=>`<tr><th>${esc(r.k)}</th><td>${escLink(r.v)}</td></tr>`).join('');
+  const rows=b.rows.map(r=>`<tr><th>${escML(r.k)}</th><td>${escML(r.v)}</td></tr>`).join('');
   return `<table class="itbl">${rows}</table>`;
 }
 function renderTimeline(b){
-  const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${escLink(it.text)}</div>${it.sub?`<div class="tl-sb">${escLink(it.sub)}</div>`:''}</div>`).join('');
+  const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${escML(it.text)}</div>${it.sub?`<div class="tl-sb">${escML(it.sub)}</div>`:''}</div>`).join('');
   return `<div class="tl">${items}</div>`;
 }
 function renderChecklist(b){
-  const items=b.items.map(it=>`<li><input type="checkbox" class="ck" ${it.checked?'checked':''}><label>${escLink(it.label)}</label>${it.who?`<span class="who">${esc(it.who)}</span>`:''}</li>`).join('');
+  const items=b.items.map(it=>`<li><input type="checkbox" class="ck" ${it.checked?'checked':''}><label>${escML(it.label)}</label>${it.who?`<span class="who">${esc(it.who)}</span>`:''}</li>`).join('');
   return `<ul class="cl-list">${items}</ul>`;
 }
 function renderNotice(b){
   const cls=b.variant==='w'?'nt-w':b.variant==='ok'?'nt-ok':'nt-i';
   const icon=b.variant==='w'?'⚠️':b.variant==='ok'?'✅':'ℹ️';
-  return `<div class="nt ${cls}"><span class="ni">${icon}</span><span>${escLink(b.text)}</span></div>`;
+  return `<div class="nt ${cls}"><span class="ni">${icon}</span><span>${escML(b.text)}</span></div>`;
 }
 
 /* ════ SYSTEM TABS RENDER ════ */
