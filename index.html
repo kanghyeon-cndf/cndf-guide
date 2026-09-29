@@ -145,6 +145,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .t-in{background:var(--accent-soft);color:var(--accent);}
 .t-ex{background:var(--success-soft);color:var(--success);}
 .t-opt{background:var(--surface2);color:var(--tx-m);}
+.t-case{background:#f3e8ff;color:#7c3aed;}
 .sc-hd-acts{display:flex;gap:4px;}
 .sc-body{padding:16px 20px;}
 /* content blocks */
@@ -181,6 +182,21 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .tl-dt{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px;}
 .tl-tx{font-size:13px;white-space:pre-wrap;word-break:break-word;}
 .tl-sb{font-size:12px;color:var(--tx-m);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
+/* 절차 항목 배경색 (대화 흐름에서 고객/상담원 구분 등) */
+.tl-i.tlbg{padding:8px 12px 8px 16px;margin-bottom:6px;border-radius:8px;}
+.tl-i.tlbg:last-child{margin-bottom:0;padding-bottom:8px;}
+.tl-i.tlbg .tl-d{top:13px;}
+.tlbg-b{background:#e8f1fb;} .tlbg-b .tl-dt{color:#1a5094;}
+.tlbg-y{background:#fff4e0;} .tlbg-y .tl-dt{color:#b35900;}
+.tlbg-g{background:#e6f4ea;} .tlbg-g .tl-dt{color:#1e7b3a;}
+.tlbg-r{background:#fde7e9;} .tlbg-r .tl-dt{color:#c42b1c;}
+.tlbg-p{background:#f3e8ff;} .tlbg-p .tl-dt{color:#7c3aed;}
+.tlbg-s{background:#eef0f3;} .tlbg-s .tl-dt{color:#4b5563;}
+/* 편집 모달 배경색 선택 */
+.tlc-row{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx-m);}
+.tlc{width:18px;height:18px;border-radius:50%;border:1px solid var(--border-strong);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx-m);}
+.tlc.sel{box-shadow:0 0 0 2px var(--accent);border-color:var(--accent);}
 .sh{font-size:13px;font-weight:700;color:var(--primary);margin:13px 0 7px;
   display:flex;align-items:center;gap:6px;}
 .sh::before{content:'';display:block;width:3px;height:13px;
@@ -227,6 +243,19 @@ code{font-family:'JetBrains Mono',monospace;background:var(--surface2);
   margin-top:8px;margin-left:6px;transition:background .14s;}
 .ip-btn:hover{background:#4a6fa0;}
 .iz.paste-ready{outline:2px dashed #6c8ebf;outline-offset:2px;}
+/* 참고 스크린샷 접기 */
+.ss-wrap{margin-top:16px;}
+.ss-sum{cursor:pointer;list-style:none;user-select:none;margin:0;padding:4px 0;}
+.ss-sum::-webkit-details-marker{display:none;}
+.ss-sum::marker{content:'';}
+.ss-sum:hover{color:var(--accent);}
+.ss-cnt{font-size:11px;font-weight:600;color:var(--tx-m);background:var(--surface2);
+  border:1px solid var(--border);border-radius:10px;padding:0 7px;}
+.ss-cnt.has{color:var(--accent);background:var(--accent-soft);border-color:transparent;}
+.ss-arrow{font-size:10px;color:var(--tx-m);transition:transform .18s;transform:rotate(-90deg);}
+.ss-wrap[open] .ss-arrow{transform:rotate(0deg);}
+.ss-wrap .iz{padding:10px;}
+.ss-wrap .iz-ph .ico{font-size:18px;margin-bottom:2px;}
 /* MODALS */
 .mov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.46);
   z-index:1000;align-items:center;justify-content:center;}
@@ -268,6 +297,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 .tt-in.sel{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600;}
 .tt-ex.sel{background:var(--success-soft);border-color:var(--success);color:var(--success);font-weight:600;}
 .tt-opt.sel{background:var(--surface2);border-color:var(--tx-m);color:var(--tx-m);font-weight:600;}
+.tt-case.sel{background:#f3e8ff;border-color:#7c3aed;color:#7c3aed;font-weight:600;}
 /* template grid */
 .tpl-grid{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px;}
 .tpl-opt{border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;
@@ -1084,6 +1114,7 @@ textarea.fi{resize:vertical;min-height:80px;}
           <div class="tt tt-in" data-tag="t-in" data-tl="내부 처리">내부 처리</div>
           <div class="tt tt-ex" data-tag="t-ex" data-tl="외부 요청">외부 요청</div>
           <div class="tt tt-opt" data-tag="t-opt" data-tl="선택">선택</div>
+          <div class="tt tt-case" data-tag="t-case" data-tl="실전 케이스">실전 케이스</div>
         </div>
       </div>
       <div class="fg">
@@ -1124,6 +1155,7 @@ textarea.fi{resize:vertical;min-height:80px;}
           <div class="tt tt-in" data-tag="t-in" data-tl="내부 처리">내부 처리</div>
           <div class="tt tt-ex" data-tag="t-ex" data-tl="외부 요청">외부 요청</div>
           <div class="tt tt-opt" data-tag="t-opt" data-tl="선택">선택</div>
+          <div class="tt tt-case" data-tag="t-case" data-tl="실전 케이스">실전 케이스</div>
         </div>
       </div>
       <div class="fg">
@@ -1325,6 +1357,9 @@ const ICONS=[
   /* 목표·상태 */ '🎯','🏆','🥇','⭐','🌟','✅','☑️','❌','🔄','🔁','⏩','🆕','🔥','💡','🔍','🔎','📐','📏',
   /* 기타 */ '🍽️','☕','🥤','🍔','🏥','🏫','🏠','🎉','🎨','📷','🎬','🌱','💧','⚡'
 ];
+/* 절차 항목 배경색 팔레트 (key → 이름/미리보기 색) */
+const TL_COLORS={b:{n:'파랑',c:'#e8f1fb'},y:{n:'노랑',c:'#fff4e0'},g:{n:'초록',c:'#e6f4ea'},r:{n:'빨강',c:'#fde7e9'},p:{n:'보라',c:'#f3e8ff'},s:{n:'회색',c:'#eef0f3'}};
+const tlBgCls=c=>TL_COLORS[c]?` tlbg tlbg-${c}`:'';
 const TPL={table:{icon:'📋',label:'표'},timeline:{icon:'📌',label:'절차'},checklist:{icon:'✅',label:'체크리스트'},text:{icon:'📝',label:'텍스트'},notice:{icon:'💬',label:'알림박스'}};
 
 /* ════ DATA ════ */
@@ -1458,7 +1493,7 @@ function renderTable(b){
   return `<table class="itbl">${rows}</table>`;
 }
 function renderTimeline(b){
-  const items=b.items.map(it=>`<div class="tl-i"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${escML(it.text)}</div>${it.sub?`<div class="tl-sb">${escML(it.sub)}</div>`:''}</div>`).join('');
+  const items=b.items.map(it=>`<div class="tl-i${tlBgCls(it.color)}"><div class="tl-d"></div><div class="tl-dt">${esc(it.title)}</div><div class="tl-tx">${escML(it.text)}</div>${it.sub?`<div class="tl-sb">${escML(it.sub)}</div>`:''}</div>`).join('');
   return `<div class="tl">${items}</div>`;
 }
 function renderChecklist(b){
@@ -1540,6 +1575,13 @@ function bakeImages(){
   })));
 }
 
+/* 참고 스크린샷 펼침 상태 (re-render 시에도 유지) */
+const _ssOpen=new Set();
+function ssCount(sid){const a=imgStore[sid];return Array.isArray(a)?a.length:(a?Object.keys(a).length:0);}
+function updateSsCount(sid,n){
+  const el=$('ssc-'+sid);if(!el) return;
+  el.textContent=n?n+'장':'없음';el.classList.toggle('has',!!n);
+}
 function renderMain(){
   const main=$('main');
   bakeImages();
@@ -1575,13 +1617,15 @@ function renderMain(){
         </div>
         <div class="sc-body">
           ${step.blocks.map(b=>renderBlock(b)).join('')}
-          <p class="sh" style="margin-top:16px">참고 스크린샷</p>
+          <details class="ss-wrap" data-ss="${step.id}"${_ssOpen.has(step.id)?' open':''}>
+          <summary class="sh ss-sum">참고 스크린샷 <span class="ss-cnt${ssCount(step.id)?' has':''}" id="ssc-${step.id}">${ssCount(step.id)?ssCount(step.id)+'장':'없음'}</span><span class="ss-arrow">▾</span></summary>
           <div class="iz" id="iz-${step.id}">
             <input type="file" id="if-${step.id}" accept="image/*" multiple>
             <div class="iz-ph" id="iph-${step.id}"><div class="ico">🖼️</div><strong>클릭하거나 드래그하여 이미지 업로드</strong><p>PNG · JPG · GIF · 여러 장 동시 업로드 가능</p></div>
             <div class="ig" id="ig-${step.id}"></div>
           </div>
           <button class="ia-btn" data-sid="${step.id}">＋ 이미지 추가</button><button class="ip-btn" data-sid="${step.id}">📋 붙여넣기</button>
+          </details>
         </div>
       </div>`;
     });
@@ -1647,6 +1691,7 @@ function updateIaBtn(sid){
   const btn=document.querySelector(`.ia-btn[data-sid="${sid}"]`);
   if(!btn||!grid) return;
   const n=grid.children.length;
+  updateSsCount(sid,n);
   if(n>=10){btn.textContent=`이미지 10/10 (최대)`;btn.disabled=true;}
   else if(n>0){btn.textContent=`＋ 이미지 추가 (${n}/10)`;btn.disabled=false;}
   else{btn.textContent='＋ 이미지 추가';btn.disabled=false;}
@@ -2048,6 +2093,14 @@ $('main').addEventListener('click',e=>{
   const iz=e.target.closest('.iz');if(iz&&!iz.classList.contains('has')){const sid=iz.id.replace('iz-','');const fi=$('if-'+sid);if(fi) fi.click();return;}
   const editStep=e.target.closest('[data-edit-step]');if(editStep){openEditStep(editStep.dataset.cat,editStep.dataset.editStep);return;}
 });
+$('main').addEventListener('toggle',e=>{
+  const d=e.target;if(!d.classList||!d.classList.contains('ss-wrap')) return;
+  if(d.open) _ssOpen.add(d.dataset.ss); else _ssOpen.delete(d.dataset.ss);
+},true);
+/* 인쇄 시에는 스크린샷을 모두 펼쳐서 출력 */
+let _printOpened=[];
+window.addEventListener('beforeprint',()=>{_printOpened=[...document.querySelectorAll('.ss-wrap:not([open])')];_printOpened.forEach(d=>d.open=true);});
+window.addEventListener('afterprint',()=>{_printOpened.forEach(d=>d.open=false);_printOpened=[];});
 $('main').addEventListener('change', e => {
   const ck = e.target;
   if (!ck.classList.contains('ck')) return;
@@ -2356,7 +2409,7 @@ function buildBEBody(b,idx){
       <button class="add-row-btn" data-addrow="${idx}">＋ 행 추가</button>`;
     case 'timeline':return `
       <input class="ri" style="width:100%;margin-bottom:7px;" value="${esc(b.title||'')}" placeholder="제목 (선택)" data-btitle="${idx}">
-      <div id="tl-${idx}" style="display:flex;flex-direction:column;gap:6px;">${b.items.map((it,ii)=>`<div class="row-ed" style="flex-direction:column;gap:4px;background:var(--surface2);border-radius:6px;padding:8px;"><div style="display:flex;gap:4px;"><input class="ri" style="flex:1;" value="${esc(it.title)}" placeholder="단계 제목" data-tti="1" data-bi="${idx}" data-ii="${ii}"><button class="rd-btn" data-deltl="${ii}" data-bi="${idx}">✕</button></div><input class="ri" value="${esc(it.text)}" placeholder="설명" data-ttx="1" data-bi="${idx}" data-ii="${ii}"><input class="ri" value="${esc(it.sub)}" placeholder="보충 설명 (선택)" data-tsb="1" data-bi="${idx}" data-ii="${ii}"></div>`).join('')}</div>
+      <div id="tl-${idx}" style="display:flex;flex-direction:column;gap:6px;">${b.items.map((it,ii)=>`<div class="row-ed" style="flex-direction:column;gap:4px;background:var(--surface2);border-radius:6px;padding:8px;"><div style="display:flex;gap:4px;"><input class="ri" style="flex:1;" value="${esc(it.title)}" placeholder="단계 제목" data-tti="1" data-bi="${idx}" data-ii="${ii}"><button class="rd-btn" data-deltl="${ii}" data-bi="${idx}">✕</button></div><div class="tlc-row" id="tlc-${idx}-${ii}">배경색 <span class="tlc${!TL_COLORS[it.color]?' sel':''}" data-tlc="" data-bi="${idx}" data-ii="${ii}" title="없음">✕</span>${Object.keys(TL_COLORS).map(k=>`<span class="tlc${it.color===k?' sel':''}" data-tlc="${k}" data-bi="${idx}" data-ii="${ii}" title="${TL_COLORS[k].n}" style="background:${TL_COLORS[k].c}"></span>`).join('')}</div><input class="ri" value="${esc(it.text)}" placeholder="설명" data-ttx="1" data-bi="${idx}" data-ii="${ii}"><input class="ri" value="${esc(it.sub)}" placeholder="보충 설명 (선택)" data-tsb="1" data-bi="${idx}" data-ii="${ii}"></div>`).join('')}</div>
       <button class="add-row-btn" data-addtl="${idx}" style="margin-top:6px;">＋ 단계 추가</button>`;
     case 'checklist':return `
       <input class="ri" style="width:100%;margin-bottom:7px;" value="${esc(b.title||'')}" placeholder="제목 (선택)" data-btitle="${idx}">
@@ -2391,6 +2444,7 @@ $('be-container').addEventListener('click',e=>{
   const addrow=e.target.closest('[data-addrow]');if(addrow){const bi=+addrow.dataset.addrow;_esBlocks[bi].rows.push({id:uid(),k:'',v:''});renderBE();return;}
   const delrow=e.target.closest('[data-delrow]');if(delrow){const bi=+delrow.dataset.bi,ri=+delrow.dataset.delrow;_esBlocks[bi].rows.splice(ri,1);renderBE();return;}
   const addtl=e.target.closest('[data-addtl]');if(addtl){const bi=+addtl.dataset.addtl;_esBlocks[bi].items.push({id:uid(),title:'',text:'',sub:''});renderBE();return;}
+  const tlc=e.target.closest('[data-tlc]');if(tlc){const bi=+tlc.dataset.bi,ii=+tlc.dataset.ii,it=_esBlocks[bi]?.items?.[ii];if(!it) return;if(tlc.dataset.tlc) it.color=tlc.dataset.tlc; else delete it.color;document.querySelectorAll(`#tlc-${bi}-${ii} .tlc`).forEach(x=>x.classList.toggle('sel',x.dataset.tlc===tlc.dataset.tlc));return;}
   const deltl=e.target.closest('[data-deltl]');if(deltl){const bi=+deltl.dataset.bi,ii=+deltl.dataset.deltl;_esBlocks[bi].items.splice(ii,1);renderBE();return;}
   const addcl=e.target.closest('[data-addcl]');if(addcl){const bi=+addcl.dataset.addcl;_esBlocks[bi].items.push({id:uid(),label:'',who:'',checked:false});renderBE();return;}
   const delcl=e.target.closest('[data-delcl]');if(delcl){const bi=+delcl.dataset.bi,ci=+delcl.dataset.delcl;_esBlocks[bi].items.splice(ci,1);renderBE();return;}
@@ -2787,13 +2841,17 @@ window.importFromOldFile = function() {
         syncUid(window.SYSTEMS);
         dedupeIds(window.SYSTEMS);
         resetUndoBaseline(true);
-        window.imgStore = sv.imgStore || {};
+        /* 파일에 이미지 데이터가 없거나 비어 있으면 기존 이미지를 그대로 유지
+           (없는 상태로 덮어쓰면 전체 프로젝트의 스크린샷이 삭제됨) */
+        var hasImgs = !!(sv.imgStore && typeof sv.imgStore === 'object' && Object.keys(sv.imgStore).length);
+        if (hasImgs) window.imgStore = sv.imgStore;
         window.activeSysId = (window.SYSTEMS[0] || {}).id || '';
         window.activeCatId = (((window.SYSTEMS[0] || {}).cats || [])[0] || {}).id || '';
         if (_ready) {
           badge('pending', '업로드 중...');
           _suppress = true;
           SYS_REF.set(window.SYSTEMS).then(function() {
+            if (!hasImgs) return;  /* 이미지 없는 파일 → Firebase 이미지 건드리지 않음 */
             return IMGS_REF.set(window.imgStore);
           }).then(function() {
             badge('synced', '동기화됨');
@@ -2937,7 +2995,13 @@ function fbInit() {
       window.SYSTEMS = toUpload;
       return SYS_REF.set(toUpload).then(function() {
         var imgs = Object.keys(localImgs).length ? localImgs : (window.imgStore || {});
-        if (Object.keys(imgs).length) return IMGS_REF.set(imgs);
+        if (!Object.keys(imgs).length) return;
+        /* 전체 덮어쓰기(set) 금지: Firebase에 이미 있는 이미지는 유지하고, 없는 작업의 이미지만 추가 */
+        return IMGS_REF.once('value').then(function(snap) {
+          var cur = snap.val() || {}, add = {};
+          Object.keys(imgs).forEach(function(k) { if (!cur[k]) add[k] = imgs[k]; });
+          if (Object.keys(add).length) return IMGS_REF.update(add);
+        });
       });
     }
   }).then(function() {
