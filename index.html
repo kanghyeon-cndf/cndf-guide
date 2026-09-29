@@ -69,7 +69,10 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);
 .sb-cat-btn:hover{background:var(--surface2);color:var(--primary);}
 .sb-cat-btn.on{color:var(--accent);}
 .sb-cat-btn .ci{font-size:14px;flex-shrink:0;}
-.sb-cat-btn .cl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 대메뉴명: 폰트 축소 + 최대 2줄 표시 후 말줄임 (전체 텍스트는 툴팁) */
+.sb-cat-btn .cl{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow:hidden;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  white-space:normal;word-break:keep-all;overflow-wrap:anywhere;}
 .sb-cat-btn .ca{font-size:10px;color:var(--tx-m);transition:transform .2s;flex-shrink:0;}
 .sb-cat-btn.on .ca{transform:rotate(90deg);}
 .sb-act{display:flex;gap:1px;padding:0 4px;flex-shrink:0;}
