@@ -254,7 +254,8 @@ code{font-family:'JetBrains Mono',monospace;background:var(--surface2);
 .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
 textarea.fi{resize:vertical;min-height:80px;}
 /* icon grid */
-.icon-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.icon-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:190px;overflow-y:auto;padding:2px;}
+.icon-opt.none{width:auto;padding:0 8px;font-size:11px;color:var(--tx-sub);}
 .icon-opt{width:34px;height:34px;border:1px solid var(--border);border-radius:6px;
   background:var(--surface2);cursor:pointer;font-size:17px;
   display:flex;align-items:center;justify-content:center;transition:all .12s;}
@@ -1311,7 +1312,19 @@ const escML=s=>escLink(s).replace(/\r\n|\r|\n/g,'<br>');
 const openM=id=>$(id).classList.add('show');
 const closeM=id=>$(id).classList.remove('show');
 
-const ICONS=['🏢','📣','👤','🗓️','📊','🔧','⚙️','📁','📌','🔍','📝','💡','🚀','🎯','🔔','📦','🛠️','📐','🔐','📋','🌐','🏆'];
+const ICONS=[
+  /* 업무·문서 */ '🏢','📁','📂','📋','📝','📄','📑','🗂️','📒','📓','📚','🗃️','🗄️','✏️','🖊️','📎','📌','📍','🔖','🏷️',
+  /* 일정·시간 */ '🗓️','📅','⏰','⏱️','⌛','🕒',
+  /* 데이터·분석 */ '📊','📈','📉','🧮','🔢','💹',
+  /* 사람·조직 */ '👤','👥','🙋','🧑‍💼','🤝','👨‍💻','🎧','🙏',
+  /* 소통·알림 */ '📣','📢','🔔','💬','🗨️','📞','☎️','📧','✉️','📨','📮',
+  /* 도구·설정 */ '🔧','🛠️','⚙️','🔩','🧰','🔨','🧪','🧩','🔌','💻','🖥️','📱','🖨️','⌨️','🖱️','💾','🌐','📡','☁️',
+  /* 보안·권한 */ '🔐','🔒','🔓','🔑','🗝️','🛡️','🚫','⚠️','🚨','❗','❓',
+  /* 돈·거래 */ '💰','💳','💵','🧾','🏦','🛒','🛍️','🎁','🏪','🏬',
+  /* 이동·물류 */ '🚗','🚙','🚚','🚀','✈️','🚢','📦','🏭','🗺️','🧭',
+  /* 목표·상태 */ '🎯','🏆','🥇','⭐','🌟','✅','☑️','❌','🔄','🔁','⏩','🆕','🔥','💡','🔍','🔎','📐','📏',
+  /* 기타 */ '🍽️','☕','🥤','🍔','🏥','🏫','🏠','🎉','🎨','📷','🎬','🌱','💧','⚡'
+];
 const TPL={table:{icon:'📋',label:'표'},timeline:{icon:'📌',label:'절차'},checklist:{icon:'✅',label:'체크리스트'},text:{icon:'📝',label:'텍스트'},notice:{icon:'💬',label:'알림박스'}};
 
 /* ════ DATA ════ */
@@ -1393,7 +1406,7 @@ function buildDefaultData(){
       {id:u(),label:'MyBMW App 반영 확인',tag:'t-req',tl:'필수',blocks:[{id:u(),type:'text',content:'이 단계의 상세 내용을 작성해 주세요.'}]},
     ]},
   ];
-  const mkEmpty=label=>({id:u(),label,desc:'업무 내용을 작성해 주세요.',steps:[{id:u(),label:'작업을 추가하세요.',tag:'t-req',tl:'필수',blocks:[{id:u(),type:'text',content:'이 단계의 상세 내용을 작성해 주세요.'}]}]});
+  const mkEmpty=label=>({id:u(),icon:'',label,desc:'업무 내용을 작성해 주세요.',steps:[{id:u(),label:'작업을 추가하세요.',tag:'t-req',tl:'필수',blocks:[{id:u(),type:'text',content:'이 단계의 상세 내용을 작성해 주세요.'}]}]});
   SYSTEMS=[
     {id:u(),label:'OAS',cats:oasCats},
     {id:u(),label:'SCP',cats:[{id:u(),icon:'📊',label:'정산 관리',desc:'SCP 월간 정산 확인 및 검증 절차',steps:[{id:u(),label:'정산 데이터 추출',tag:'t-req',tl:'필수',blocks:[{id:u(),type:'text',content:'이 단계의 상세 내용을 작성해 주세요.'}]}]}]},
@@ -1434,7 +1447,7 @@ function renderBlock(b){
   return `<details class="blk-wrap" open>
     <summary class="blk-hd">
       <span class="blk-ico">${meta.icon}</span>
-      <span class="blk-ttl">${ttl}</span>
+      <span class="blk-ttl" title="${ttl}">${ttl}</span>
       <span class="blk-arrow">▾</span>
     </summary>
     <div class="blk-body">${inner}</div>
@@ -1486,8 +1499,8 @@ function renderSidebar(){
     div.innerHTML=`
       <div class="sb-cat-hd">
         <button class="sb-cat-btn ${isOpen?'on':''}" data-nav-cat="${cat.id}">
-          <span class="ci">${cat.icon}</span>
-          <span class="cl">${esc(cat.label)}</span>
+          <span class="ci">${cat.icon||''}</span>
+          <span class="cl" title="${esc(cat.label)}">${esc(cat.label)}</span>
           <span class="ca">▶</span>
         </button>
         <div class="sb-act">
@@ -1499,7 +1512,7 @@ function renderSidebar(){
         ${cat.steps.map((s,i)=>`
           <div class="sb-step-row" draggable="true" data-step="${s.id}" data-cat="${cat.id}" data-sidx="${i}">
             <span class="dh" title="드래그로 순서 변경">⠿</span>
-            <button class="sb-step-btn" data-nav-step="${s.id}">
+            <button class="sb-step-btn" data-nav-step="${s.id}" title="${esc(s.label)}">
               <span class="sn">${i+1}</span>
               <span class="sl">${esc(s.label)}</span>
             </button>
@@ -1548,7 +1561,7 @@ function renderMain(){
     const page=document.createElement('div');
     page.className='page'+(cat.id===activeCatId?' on':'');
     page.id='page-'+cat.id;
-    let html=`<div class="pg-hd"><h1>${cat.icon} ${esc(cat.label)}</h1><p>${esc(cat.desc)}</p></div>
+    let html=`<div class="pg-hd"><h1>${cat.icon?cat.icon+' ':''}${esc(cat.label)}</h1><p>${esc(cat.desc)}</p></div>
       <div class="pg-prog"><div class="pp-top"><span>전체 진행률</span><span id="pt-${cat.id}">0 / 0 완료</span></div><div class="pp-bar"><div class="pp-fill" id="pf-${cat.id}" style="width:0%"></div></div></div>`;
     cat.steps.forEach((step,i)=>{
       html+=`<div class="sc" id="step-${step.id}">
@@ -2188,7 +2201,8 @@ $('sys-save').addEventListener('click',()=>{
 /* ════ CAT MODAL ════ */
 let _editCatId=null,_selIcon=ICONS[0];
 function buildIconGrid(){
-  $('icon-grid').innerHTML=ICONS.map(ic=>`<div class="icon-opt${ic===_selIcon?' sel':''}" data-icon="${ic}">${ic}</div>`).join('');
+  $('icon-grid').innerHTML=`<div class="icon-opt none${!_selIcon?' sel':''}" data-icon="" title="아이콘 없음">없음</div>`+
+    ICONS.map(ic=>`<div class="icon-opt${ic===_selIcon?' sel':''}" data-icon="${ic}">${ic}</div>`).join('');
 }
 $('icon-grid').addEventListener('click',e=>{
   const opt=e.target.closest('.icon-opt');if(!opt) return;
@@ -2203,7 +2217,7 @@ function openAddCat(){
 }
 function openEditCat(catId){
   const cat=activeCats().find(c=>c.id===catId);if(!cat) return;
-  _editCatId=catId;_selIcon=cat.icon;
+  _editCatId=catId;_selIcon=cat.icon||'';
   $('cat-m-title').textContent='대메뉴 수정';
   $('cat-name').value=cat.label;$('cat-desc').value=cat.desc||'';
   buildIconGrid();openM('m-cat');setTimeout(()=>$('cat-name').focus(),50);
@@ -2311,7 +2325,7 @@ $('es-del').addEventListener('click',e=>{
       if(!targetCat) return;
       targetCat.steps=targetCat.steps.filter(s=>s.id!==stepId);
       delete imgStore[stepId];
-      IMGS_REF.child(stepId).remove();
+      if(window.removeStepImages) window.removeStepImages(stepId);
       scheduleWrite();render();
     });
   },50);
@@ -2687,7 +2701,8 @@ window.scheduleWrite = function() {
   badge('pending', '저장 중...');
   _writeTimer = setTimeout(function() {
     _suppress = true;
-    SYS_REF.set(sys).then(function() {
+    /* Firebase set()은 undefined 값이 있으면 예외를 던지므로 JSON 왕복으로 제거 */
+    SYS_REF.set(JSON.parse(JSON.stringify(window.SYSTEMS))).then(function() {
       badge('synced', '동기화됨');
     }).catch(function(e) {
       _suppress = false;
@@ -2713,6 +2728,14 @@ window.pushImages = function() {
   }).catch(function(e) {
     _suppressImgs = false;
     console.warn('[Firebase] 이미지 저장 실패:', e.message);
+  });
+};
+
+/* 작업 삭제 시 해당 작업의 이미지 제거 (IMGS_REF는 이 IIFE 안에서만 접근 가능) */
+window.removeStepImages = function(sid) {
+  if (!_ready) return;
+  IMGS_REF.child(sid).remove().catch(function(e) {
+    console.warn('[Firebase] 이미지 삭제 실패:', e.message);
   });
 };
 
