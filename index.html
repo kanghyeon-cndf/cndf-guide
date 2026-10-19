@@ -336,6 +336,9 @@ textarea.fi{resize:vertical;min-height:80px;}
 .be-label{flex:1;font-size:12px;font-weight:600;color:var(--tx-sub);}
 .be-del{background:none;border:none;cursor:pointer;color:var(--tx-m);font-size:13px;padding:2px 5px;}
 .be-del:hover{color:var(--danger);}
+.be-mv,.oi-mv{background:none;border:none;cursor:pointer;color:var(--tx-m);font-size:11px;padding:2px 5px;}
+.be-mv:hover:not(:disabled),.oi-mv:hover:not(:disabled){color:var(--accent);}
+.be-mv:disabled,.oi-mv:disabled{opacity:.3;cursor:default;}
 .be-body{padding:12px;}
 .row-ed{display:flex;gap:7px;margin-bottom:5px;align-items:flex-start;}
 .row-ed:last-child{margin-bottom:0;}
@@ -1132,7 +1135,7 @@ textarea.fi{resize:vertical;min-height:80px;}
         </div>
       </div>
       <div class="fg" id="ord-section" style="display:none;">
-        <label class="fl">템플릿 순서 조정 (드래그)</label>
+        <label class="fl">템플릿 순서 조정 (드래그 또는 ▲▼ 버튼)</label>
         <div class="ord-list" id="ord-list"></div>
       </div>
     </div>
@@ -1163,7 +1166,7 @@ textarea.fi{resize:vertical;min-height:80px;}
         </div>
       </div>
       <div class="fg">
-        <label class="fl">콘텐츠 블록 (헤더 드래그로 순서 조정)</label>
+        <label class="fl">콘텐츠 블록 (헤더 드래그 또는 ▲▼ 버튼으로 순서 조정)</label>
         <div id="be-container"></div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">
           <button class="add-row-btn sm" data-ab="table">＋ 표</button>
@@ -2327,7 +2330,7 @@ function updateOrdList(){
   const ol=$('ord-list'),sec=$('ord-section');
   if(!_selTpls.length){sec.style.display='none';ol.innerHTML='';return;}
   sec.style.display='';
-  ol.innerHTML=_selTpls.map((t,i)=>`<div class="ord-item" draggable="true" data-oi="${i}"><span class="oi-drag">⠿</span><span>${TPL[t.type].icon}</span><span class="oi-label">${TPL[t.type].label}</span></div>`).join('');
+  ol.innerHTML=_selTpls.map((t,i)=>`<div class="ord-item" draggable="true" data-oi="${i}"><span class="oi-drag">⠿</span><span>${TPL[t.type].icon}</span><span class="oi-label">${TPL[t.type].label}</span><button class="oi-mv" data-oi-mv="${i}" data-dir="-1" title="위로" ${i===0?'disabled':''}>▲</button><button class="oi-mv" data-oi-mv="${i}" data-dir="1" title="아래로" ${i===_selTpls.length-1?'disabled':''}>▼</button></div>`).join('');
   setupOrdDrag();
 }
 function setupOrdDrag(){
@@ -2340,6 +2343,11 @@ function setupOrdDrag(){
     item.addEventListener('drop',e=>{e.preventDefault();if(ds===item) return;const fi=+ds.dataset.oi,ti=+item.dataset.oi;const mv=_selTpls.splice(fi,1)[0];_selTpls.splice(ti,0,mv);updateOrdList();});
   });
 }
+$('ord-list').addEventListener('click',e=>{
+  const b=e.target.closest('[data-oi-mv]');if(!b) return;
+  const fi=+b.dataset.oiMv,ti=fi+(+b.dataset.dir);if(ti<0||ti>=_selTpls.length) return;
+  const mv=_selTpls.splice(fi,1)[0];_selTpls.splice(ti,0,mv);updateOrdList();
+});
 $('as-save').addEventListener('click',()=>{
   const name=$('as-name').value.trim();if(!name){$('as-name').focus();return;}
   const cat=activeCats().find(c=>c.id===_addStepCatId);if(!cat) return;
@@ -2398,12 +2406,14 @@ function renderBE(){
   const con=$('be-container');con.innerHTML='';
   _esBlocks.forEach((block,i)=>{
     const div=document.createElement('div');
-    div.className='be';div.dataset.bi=i;div.draggable=true;
+    div.className='be';div.dataset.bi=i;
     div.innerHTML=`
       <div class="be-hd">
         <span class="be-drag">⠿</span>
         <span class="be-icon">${TPL[block.type]?.icon||'📄'}</span>
         <span class="be-label">${TPL[block.type]?.label||block.type}</span>
+        <button class="be-mv" data-mv-bi="${i}" data-dir="-1" title="위로" ${i===0?'disabled':''}>▲</button>
+        <button class="be-mv" data-mv-bi="${i}" data-dir="1" title="아래로" ${i===_esBlocks.length-1?'disabled':''}>▼</button>
         <button class="be-del" data-del-bi="${i}">✕</button>
       </div>
       <div class="be-body">${buildBEBody(block,i)}</div>`;
@@ -2451,6 +2461,7 @@ $('be-container').addEventListener('input',e=>{
 });
 $('be-container').addEventListener('click',e=>{
   const delbi=e.target.closest('[data-del-bi]');if(delbi){_esBlocks.splice(+delbi.dataset.delBi,1);renderBE();return;}
+  const mvbi=e.target.closest('[data-mv-bi]');if(mvbi){const fi=+mvbi.dataset.mvBi,ti=fi+(+mvbi.dataset.dir);if(ti<0||ti>=_esBlocks.length) return;const mv=_esBlocks.splice(fi,1)[0];_esBlocks.splice(ti,0,mv);renderBE();return;}
   const addrow=e.target.closest('[data-addrow]');if(addrow){const bi=+addrow.dataset.addrow;_esBlocks[bi].rows.push({id:uid(),k:'',v:''});renderBE();return;}
   const delrow=e.target.closest('[data-delrow]');if(delrow){const bi=+delrow.dataset.bi,ri=+delrow.dataset.delrow;_esBlocks[bi].rows.splice(ri,1);renderBE();return;}
   const addtl=e.target.closest('[data-addtl]');if(addtl){const bi=+addtl.dataset.addtl;_esBlocks[bi].items.push({id:uid(),title:'',text:'',sub:''});renderBE();return;}
@@ -2467,8 +2478,13 @@ function setupBEDrag(){
   const con=$('be-container'),items=[...con.querySelectorAll('.be')];
   let ds=null;
   items.forEach(el=>{
-    el.addEventListener('dragstart',e=>{if(!e.target.closest('.be-hd')) return;ds=el;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');items.forEach(i=>i.classList.remove('drag-over'));ds=null;});
+    // dragstart의 target은 항상 블록(.be) 자체라 헤더 여부를 판별할 수 없으므로,
+    // 헤더를 누를 때만 draggable을 켜서 헤더 드래그로만 순서가 바뀌게 한다 (입력칸 텍스트 선택 방해 방지)
+    const hd=el.querySelector('.be-hd');
+    hd.addEventListener('mousedown',e=>{if(!e.target.closest('button')) el.draggable=true;});
+    hd.addEventListener('mouseup',()=>{el.draggable=false;});
+    el.addEventListener('dragstart',e=>{if(!el.draggable) return;ds=el;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','');});
+    el.addEventListener('dragend',()=>{el.draggable=false;el.classList.remove('dragging');items.forEach(i=>i.classList.remove('drag-over'));ds=null;});
     el.addEventListener('dragover',e=>{e.preventDefault();items.forEach(i=>i.classList.remove('drag-over'));if(el!==ds) el.classList.add('drag-over');});
     el.addEventListener('drop',e=>{e.preventDefault();if(!ds||ds===el) return;const fi=+ds.dataset.bi,ti=+el.dataset.bi;const mv=_esBlocks.splice(fi,1)[0];_esBlocks.splice(ti,0,mv);renderBE();});
   });
